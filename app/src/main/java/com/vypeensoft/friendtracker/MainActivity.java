@@ -30,8 +30,11 @@ public class MainActivity extends AppCompatActivity {
     // Coordinate state & standard Marker references
     private LatLng redLatLng;
     private LatLng greenLatLng;
+    private LatLng blueLatLng;
+    
     private Marker redMarker;
     private Marker greenMarker;
+    private Marker blueMarker;
 
     // Movement Loop Handler
     private final android.os.Handler movementHandler = new android.os.Handler(android.os.Looper.getMainLooper());
@@ -73,12 +76,26 @@ public class MainActivity extends AppCompatActivity {
                 redLatLng = new LatLng(baseLat, baseLon);
                 greenLatLng = new LatLng(baseLat + deltaLat, baseLon + deltaLon);
 
+                // Math for Blue Point: Place it perpendicular to the Red-Green line from their midpoint
+                // by 600 meters. The distance to both Red and Green will be sqrt(500^2 + 600^2) = ~781 meters
+                // (which is perfectly between 500 meters and 1000 meters!).
+                double midLat = baseLat + deltaLat / 2.0;
+                double midLon = baseLon + deltaLon / 2.0;
+
+                double perpDistanceKm = 0.6; // 600 meters
+                double perpAngle = angle + Math.PI / 2.0; // Perpendicular bearing (rotated by 90 degrees)
+                double perpLat = (perpDistanceKm / 111.12) * Math.cos(perpAngle);
+                double perpLon = ((perpDistanceKm / 111.12) * Math.sin(perpAngle)) / Math.cos(Math.toRadians(midLat));
+
+                blueLatLng = new LatLng(midLat + perpLat, midLon + perpLon);
+
                 // Create custom icons from our programmatically generated teardrop pin vector bitmaps
                 IconFactory iconFactory = IconFactory.getInstance(MainActivity.this);
                 Icon redIcon = iconFactory.fromBitmap(createTeardropMarkerBitmap(Color.parseColor("#E53935"))); // Crimson Red Tint
                 Icon greenIcon = iconFactory.fromBitmap(createTeardropMarkerBitmap(Color.parseColor("#4CAF50"))); // Vibrant Green Tint
+                Icon blueIcon = iconFactory.fromBitmap(createTeardropMarkerBitmap(Color.parseColor("#2196F3"))); // Blue Tint
 
-                // Add standard built-in Markers to the Map (100% visible, timing-robust, no overlap bugs)
+                // Add standard built-in Markers to the Map
                 redMarker = mapLibreMap.addMarker(new MarkerOptions()
                         .position(redLatLng)
                         .title("Red Point (~1km)")
@@ -89,15 +106,19 @@ public class MainActivity extends AppCompatActivity {
                         .title("Green Point (~1km)")
                         .icon(greenIcon));
 
+                blueMarker = mapLibreMap.addMarker(new MarkerOptions()
+                        .position(blueLatLng)
+                        .title("Blue Point (~781m)")
+                        .icon(blueIcon));
+
                 // Calculate the midpoint between the points for the camera positioning
-                LatLng midpoint = new LatLng(
-                        (redLatLng.getLatitude() + greenLatLng.getLatitude()) / 2.0,
-                        (redLatLng.getLongitude() + greenLatLng.getLongitude()) / 2.0
+                LatLng cameraMidpoint = new LatLng(
+                        (redLatLng.getLatitude() + greenLatLng.getLatitude() + blueLatLng.getLatitude()) / 3.0,
+                        (redLatLng.getLongitude() + greenLatLng.getLongitude() + blueLatLng.getLongitude()) / 3.0
                 );
 
-                // Safe Initial Camera Centering: moveCamera(newLatLngZoom) is synchronous, layout size-independent,
-                // and 100% immune to IllegalArgumentExceptions from zero-measured layout passes.
-                mapLibreMap.moveCamera(CameraUpdateFactory.newLatLngZoom(midpoint, 14.5));
+                // Safe Initial Camera Centering: moveCamera(newLatLngZoom) is synchronous, layout size-independent
+                mapLibreMap.moveCamera(CameraUpdateFactory.newLatLngZoom(cameraMidpoint, 14.5));
 
                 // Start the loop immediately
                 startMovementLoop();
@@ -106,8 +127,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * Spawns a repeating 1-second loop that moves both coordinates by exactly 1 meter
-     * in a random direction, maintaining their 1km relative separation.
+     * Spawns a repeating 1-second loop that moves all three coordinates by exactly 1 meter
+     * in a random direction, maintaining their relative separations.
      */
     private void startMovementLoop() {
         if (movementRunnable != null) return; // Already running
@@ -115,7 +136,7 @@ public class MainActivity extends AppCompatActivity {
         movementRunnable = new Runnable() {
             @Override
             public void run() {
-                if (isDestroyed() || redMarker == null || greenMarker == null) return;
+                if (isDestroyed() || redMarker == null || greenMarker == null || blueMarker == null) return;
 
                 // Move by 1 meter in a random direction
                 double angle = Math.random() * 2 * Math.PI;
@@ -126,13 +147,15 @@ public class MainActivity extends AppCompatActivity {
                 double deltaLat = (distanceKm / 111.12) * Math.cos(angle);
                 double deltaLon = ((distanceKm / 111.12) * Math.sin(angle)) / Math.cos(Math.toRadians(avgLat));
 
-                // Translate both coordinates by the exact same delta vector
+                // Translate all three coordinates by the exact same delta vector to preserve their relative distances
                 redLatLng = new LatLng(redLatLng.getLatitude() + deltaLat, redLatLng.getLongitude() + deltaLon);
                 greenLatLng = new LatLng(greenLatLng.getLatitude() + deltaLat, greenLatLng.getLongitude() + deltaLon);
+                blueLatLng = new LatLng(blueLatLng.getLatitude() + deltaLat, blueLatLng.getLongitude() + deltaLon);
 
                 // Update marker positions instantly on the Map
                 redMarker.setPosition(redLatLng);
                 greenMarker.setPosition(greenLatLng);
+                blueMarker.setPosition(blueLatLng);
 
                 // Repeat every 1 second
                 movementHandler.postDelayed(this, 1000L);
@@ -207,7 +230,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         mapView.onResume();
-        if (redMarker != null && greenMarker != null) {
+        if (redMarker != null && greenMarker != null && blueMarker != null) {
             startMovementLoop();
         }
     }
