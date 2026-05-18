@@ -4,35 +4,34 @@ import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
-import android.graphics.drawable.Drawable;
+import android.graphics.Path;
+import android.graphics.RectF;
 import android.os.Bundle;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.content.ContextCompat;
-import androidx.core.graphics.drawable.DrawableCompat;
 
 import org.maplibre.android.MapLibre;
+import org.maplibre.android.annotations.Icon;
+import org.maplibre.android.annotations.IconFactory;
+import org.maplibre.android.annotations.Marker;
+import org.maplibre.android.annotations.MarkerOptions;
 import org.maplibre.android.camera.CameraUpdateFactory;
 import org.maplibre.android.geometry.LatLng;
-import org.maplibre.android.geometry.LatLngBounds;
 import org.maplibre.android.maps.MapView;
 import org.maplibre.android.maps.MapLibreMap;
 import org.maplibre.android.maps.Style;
-import org.maplibre.android.plugins.annotation.SymbolManager;
-import org.maplibre.android.plugins.annotation.SymbolOptions;
 
 public class MainActivity extends AppCompatActivity {
 
     private MapView mapView;
     private MapLibreMap mapLibreMap;
-    private SymbolManager symbolManager;
 
-    // Coordinate state & Symbol references
+    // Coordinate state & standard Marker references
     private LatLng redLatLng;
     private LatLng greenLatLng;
-    private org.maplibre.android.plugins.annotation.Symbol redSymbol;
-    private org.maplibre.android.plugins.annotation.Symbol greenSymbol;
+    private Marker redMarker;
+    private Marker greenMarker;
 
     // Movement Loop Handler
     private final android.os.Handler movementHandler = new android.os.Handler(android.os.Looper.getMainLooper());
@@ -56,17 +55,6 @@ public class MainActivity extends AppCompatActivity {
             String styleUrl = "https://tiles.openfreemap.org/styles/liberty";
             map.setStyle(new Style.Builder().fromUri(styleUrl), style -> {
 
-                // 1. Add Red and Green tinted marker images using the existing project marker asset
-                style.addImage("red-marker", getTintedMarkerBitmap(R.drawable.ic_friend_marker, Color.parseColor("#E53935"))); // Crimson Red Tint
-                style.addImage("green-marker", getTintedMarkerBitmap(R.drawable.ic_friend_marker, Color.parseColor("#4CAF50"))); // Vibrant Green Tint
-
-                // 2. Setup the SymbolManager for adding markers
-                symbolManager = new SymbolManager(mapView, map, style);
-                symbolManager.setIconAllowOverlap(true);
-                symbolManager.setTextAllowOverlap(true);
-                symbolManager.setIconIgnorePlacement(true);
-                symbolManager.setTextIgnorePlacement(true);
-
                 // Define Base Point: Cochin, Kerala, India (beautiful area with clear map layers)
                 double baseLat = 9.93123;
                 double baseLon = 76.26730;
@@ -85,30 +73,23 @@ public class MainActivity extends AppCompatActivity {
                 redLatLng = new LatLng(baseLat, baseLon);
                 greenLatLng = new LatLng(baseLat + deltaLat, baseLon + deltaLon);
 
-                // Create the Red Point marker
-                SymbolOptions redOptions = new SymbolOptions()
-                        .withLatLng(redLatLng)
-                        .withIconImage("red-marker")
-                        .withIconSize(1.0f)
-                        .withTextField("Red Point (~1km)")
-                        .withTextColor("red")
-                        .withTextSize(12f)
-                        .withTextOffset(new Float[]{0f, 1.8f});
+                // Create custom icons from our programmatically generated teardrop pin vector bitmaps
+                IconFactory iconFactory = IconFactory.getInstance(MainActivity.this);
+                Icon redIcon = iconFactory.fromBitmap(createTeardropMarkerBitmap(Color.parseColor("#E53935"))); // Crimson Red Tint
+                Icon greenIcon = iconFactory.fromBitmap(createTeardropMarkerBitmap(Color.parseColor("#4CAF50"))); // Vibrant Green Tint
 
-                // Create the Green Point marker
-                SymbolOptions greenOptions = new SymbolOptions()
-                        .withLatLng(greenLatLng)
-                        .withIconImage("green-marker")
-                        .withIconSize(1.0f)
-                        .withTextField("Green Point (~1km)")
-                        .withTextColor("green")
-                        .withTextSize(12f)
-                        .withTextOffset(new Float[]{0f, 1.8f});
+                // Add standard built-in Markers to the Map (100% visible, timing-robust, no overlap bugs)
+                redMarker = mapLibreMap.addMarker(new MarkerOptions()
+                        .position(redLatLng)
+                        .title("Red Point (~1km)")
+                        .icon(redIcon));
 
-                redSymbol = symbolManager.create(redOptions);
-                greenSymbol = symbolManager.create(greenOptions);
+                greenMarker = mapLibreMap.addMarker(new MarkerOptions()
+                        .position(greenLatLng)
+                        .title("Green Point (~1km)")
+                        .icon(greenIcon));
 
-                // Calculate the midpoint between the points
+                // Calculate the midpoint between the points for the camera positioning
                 LatLng midpoint = new LatLng(
                         (redLatLng.getLatitude() + greenLatLng.getLatitude()) / 2.0,
                         (redLatLng.getLongitude() + greenLatLng.getLongitude()) / 2.0
@@ -134,7 +115,7 @@ public class MainActivity extends AppCompatActivity {
         movementRunnable = new Runnable() {
             @Override
             public void run() {
-                if (isDestroyed() || redSymbol == null || greenSymbol == null) return;
+                if (isDestroyed() || redMarker == null || greenMarker == null) return;
 
                 // Move by 1 meter in a random direction
                 double angle = Math.random() * 2 * Math.PI;
@@ -149,11 +130,9 @@ public class MainActivity extends AppCompatActivity {
                 redLatLng = new LatLng(redLatLng.getLatitude() + deltaLat, redLatLng.getLongitude() + deltaLon);
                 greenLatLng = new LatLng(greenLatLng.getLatitude() + deltaLat, greenLatLng.getLongitude() + deltaLon);
 
-                // Update marker positions on the Map
-                redSymbol.setLatLng(redLatLng);
-                greenSymbol.setLatLng(greenLatLng);
-                symbolManager.update(redSymbol);
-                symbolManager.update(greenSymbol);
+                // Update marker positions instantly on the Map
+                redMarker.setPosition(redLatLng);
+                greenMarker.setPosition(greenLatLng);
 
                 // Repeat every 1 second
                 movementHandler.postDelayed(this, 1000L);
@@ -174,64 +153,46 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * Programmatically tints an existing project drawable asset to a custom color
-     * and converts it to a high-resolution Bitmap.
+     * Programmatically draws a beautiful classic teardrop vector map pin with:
+     * 1. A soft drop shadow under the pointer tip.
+     * 2. A crisp white outer pointer border.
+     * 3. A solid colored inner pointer core.
+     * 4. A glowing white central dot inside the head of the pin.
      */
-    private Bitmap getTintedMarkerBitmap(int drawableId, int tintColor) {
-        Drawable drawable = ContextCompat.getDrawable(this, drawableId);
-        if (drawable == null) {
-            return createMarkerBitmap(tintColor); // Fallback to programmatic circle if resource missing
-        }
-
-        // Wrap and mutate the drawable to safely apply the tint color
-        drawable = DrawableCompat.wrap(drawable).mutate();
-        DrawableCompat.setTint(drawable, tintColor);
-
-        int width = drawable.getIntrinsicWidth() > 0 ? drawable.getIntrinsicWidth() : 128;
-        int height = drawable.getIntrinsicHeight() > 0 ? drawable.getIntrinsicHeight() : 128;
-
-        // Bound dimensions to optimized standard size (128x128 max)
-        int maxSize = 128;
-        if (width > maxSize || height > maxSize) {
-            float ratio = Math.min((float) maxSize / width, (float) maxSize / height);
-            width = Math.round(width * ratio);
-            height = Math.round(height * ratio);
-        }
-
-        Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
-        Canvas canvas = new Canvas(bitmap);
-        drawable.setBounds(0, 0, canvas.getWidth(), canvas.getHeight());
-        drawable.draw(canvas);
-
-        return bitmap;
-    }
-
-    /**
-     * Programmatically generates a circular pin/marker bitmap as fallback.
-     */
-    private Bitmap createMarkerBitmap(int color) {
+    private Bitmap createTeardropMarkerBitmap(int color) {
         int size = 128;
         Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
 
         Paint paint = new Paint();
         paint.setAntiAlias(true);
+        paint.setStyle(Paint.Style.FILL);
 
-        // 1. Shadow (Soft Black)
-        paint.setColor(Color.parseColor("#40000000"));
-        canvas.drawCircle(size / 2f, size / 2f + 8, size / 2.4f, paint);
+        // 1. Draw soft drop shadow under the tip
+        paint.setColor(Color.parseColor("#33000000"));
+        canvas.drawCircle(64, 110, 14, paint);
 
-        // 2. Outer border (Pure White)
+        // 2. Draw white outer pin border
         paint.setColor(Color.WHITE);
-        canvas.drawCircle(size / 2f, size / 2f, size / 2.4f, paint);
+        Path outerPath = new Path();
+        outerPath.moveTo(64, 110); // Tip at bottom
+        outerPath.lineTo(30, 50); // Left tangent
+        outerPath.arcTo(new RectF(30, 12, 98, 80), 150, 240, false); // Top circle
+        outerPath.close();
+        canvas.drawPath(outerPath, paint);
 
-        // 3. Colored Core
+        // 3. Draw colored inner pin core
         paint.setColor(color);
-        canvas.drawCircle(size / 2f, size / 2f, size / 3.4f, paint);
+        Path innerPath = new Path();
+        innerPath.moveTo(64, 102); // Tip at bottom
+        innerPath.lineTo(36, 52); // Left tangent
+        innerPath.arcTo(new RectF(36, 18, 92, 74), 150, 240, false); // Top circle
+        innerPath.close();
+        canvas.drawPath(innerPath, paint);
 
-        // 4. Center Dot (Pure White for premium glowing appearance)
+        // 4. Draw central white glowing dot inside the head of the pin
         paint.setColor(Color.WHITE);
-        canvas.drawCircle(size / 2f, size / 2f, size / 8f, paint);
+        canvas.drawCircle(64, 46, 12, paint);
 
         return bitmap;
     }
@@ -246,7 +207,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         mapView.onResume();
-        if (redSymbol != null && greenSymbol != null) {
+        if (redMarker != null && greenMarker != null) {
             startMovementLoop();
         }
     }
