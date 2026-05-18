@@ -127,7 +127,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * Spawns a repeating 1-second loop that moves all three coordinates by exactly 1 meter
+     * Spawns a repeating 1-second loop that moves all three coordinates by exactly 15 meters
      * in a random direction, maintaining their relative separations.
      */
     private void startMovementLoop() {
@@ -138,11 +138,11 @@ public class MainActivity extends AppCompatActivity {
             public void run() {
                 if (isDestroyed() || redMarker == null || greenMarker == null || blueMarker == null) return;
 
-                // Move by 1 meter in a random direction
+                // Move by 15 meters in a random direction (perfectly visible real-time movement step size)
                 double angle = Math.random() * 2 * Math.PI;
 
-                // 1 meter = 0.001 kilometer
-                double distanceKm = 0.001; 
+                // 15 meters = 0.015 kilometer (highly visible ~2.2 pixels shift per second at zoom 14.5)
+                double distanceKm = 0.015; 
                 double avgLat = (redLatLng.getLatitude() + greenLatLng.getLatitude()) / 2.0;
                 double deltaLat = (distanceKm / 111.12) * Math.cos(angle);
                 double deltaLon = ((distanceKm / 111.12) * Math.sin(angle)) / Math.cos(Math.toRadians(avgLat));
@@ -156,6 +156,12 @@ public class MainActivity extends AppCompatActivity {
                 redMarker.setPosition(redLatLng);
                 greenMarker.setPosition(greenLatLng);
                 blueMarker.setPosition(blueLatLng);
+
+                // Force layout redraw to guarantee coordinates render instantly on the screen
+                mapView.invalidate();
+
+                // Log diagnostic coordinates to Logcat to easily monitor real-time active loop ticks
+                android.util.Log.d("FriendTracker", "Loop tick coordinate shift. Red: " + redLatLng.toString());
 
                 // Repeat every 1 second
                 movementHandler.postDelayed(this, 1000L);
