@@ -1,0 +1,34 @@
+[
+    {
+        "merged": "com.vypeensoft.friendtracker.app-merged_res-35:/drawable_app_icon.png.flat",
+        "source": "com.vypeensoft.friendtracker.app-main-37:/drawable/app_icon.png"
+    },
+    {
+        "merged": "com.vypeensoft.friendtracker.app-merged_res-35:/drawable_ic_friend_marker.png.flat",
+        "source": "com.vypeensoft.friendtracker.app-main-37:/drawable/ic_friend_marker.png"
+    },
+    {
+        "merged": "com.vypeensoft.friendtracker.app-merged_res-35:/layout_activity_main.xml.flat",
+        "source": "com.vypeensoft.friendtracker.app-main-37:/layout/activity_main.xml"
+    },
+    {
+        "merged": "com.vypeensoft.friendtracker.app-merged_res-35:/drawable_me_marker.xml.flat",
+        "source": "com.vypeensoft.friendtracker.app-main-37:/drawable/me_marker.xml"
+    },
+    {
+        "merged": "com.vypeensoft.friendtracker.app-merged_res-35:/xml_data_extraction_rules.xml.flat",
+        "source": "com.vypeensoft.friendtracker.app-main-37:/xml/data_extraction_rules.xml"
+    },
+    {
+        "merged": "com.vypeensoft.friendtracker.app-merged_res-35:/xml_backup_rules.xml.flat",
+        "source": "com.vypeensoft.friendtracker.app-main-37:/xml/backup_rules.xml"
+    },
+    {
+        "merged": "com.vypeensoft.friendtracker.app-merged_res-35:/drawable_friend_marker.xml.flat",
+        "source": "com.vypeensoft.friendtracker.app-main-37:/drawable/friend_marker.xml"
+    },
+    {
+        "merged": "com.vypeensoft.friendtracker.app-merged_res-35:/drawable_ic_me_marker.png.flat",
+        "source": "com.vypeensoft.friendtracker.app-main-37:/drawable/ic_me_marker.png"
+    }
+]

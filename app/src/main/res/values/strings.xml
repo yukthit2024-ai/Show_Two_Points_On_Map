@@ -1,0 +1,19 @@
+<resources>
+    <string name="app_name">Friends Location Tracker</string>
+    <string name="title_activity_settings">Map Settings</string>
+    <string name="title_activity_matrix_credentials">Matrix Credentials</string>
+    <string name="title_activity_groups_rooms">Groups/Rooms</string>
+    <string name="title_activity_help">Help</string>
+    <string name="title_activity_about">About</string>
+    
+    <string name="menu_map_settings">Map Settings</string>
+    <string name="menu_matrix_credentials">Matrix Credentials</string>
+    <string name="menu_groups_rooms">Groups/Rooms</string>
+    <string name="menu_help">Help</string>
+    <string name="menu_about">About</string>
+    
+    <string name="about_text">"Friends Location Tracker\nVersion 1.1\n\nA simple app to track friends\' locations in real-time using the Matrix protocol."</string>
+    <string name="help_text">"How to use:\n1. Configure your Matrix Credentials.\n2. Add your groups in the Groups/Rooms section and select one as active.\n3. Grant location permissions.\n4. Your location will be shared in the active room, and friends\\' locations will appear on the map."</string>
+    
+    <string name="permission_rationale">This app needs location permissions to track your movement and display your position on the map.</string>
+</resources>

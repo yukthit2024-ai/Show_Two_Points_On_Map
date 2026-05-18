@@ -1,0 +1,19 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.vypeensoft.friendtracker.app-mergeDebugResources-33:/values-he/values-he.xml",
+            "map": [
+                {
+                    "source": "C:\\Users\\ShibuPC\\.gradle\\caches\\transforms-3\\dd89da214864d5e8ae11d1b2ba567cbd\\transformed\\jetified-android-sdk-11.5.0\\res\\values-he\\values-he.xml",
+                    "from": {
+                        "startLines": "2,3,4,5,6,7,8",
+                        "startColumns": "4,4,4,4,4,4,4",
+                        "startOffsets": "55,179,270,388,493,647,763",
+                        "endColumns": "123,90,117,104,153,115,138",
+                        "endOffsets": "174,265,383,488,642,758,897"
+                    }
+                }
+            ]
+        }
+    ]
+}
