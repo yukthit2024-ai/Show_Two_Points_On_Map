@@ -4,10 +4,13 @@ import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
+import androidx.core.graphics.drawable.DrawableCompat;
 
 import org.maplibre.android.MapLibre;
 import org.maplibre.android.camera.CameraUpdateFactory;
@@ -53,16 +56,16 @@ public class MainActivity extends AppCompatActivity {
             String styleUrl = "https://tiles.openfreemap.org/styles/liberty";
             map.setStyle(new Style.Builder().fromUri(styleUrl), style -> {
 
-                // Setup the SymbolManager for adding markers
+                // 1. Add Red and Green tinted marker images using the existing project marker asset
+                style.addImage("red-marker", getTintedMarkerBitmap(R.drawable.ic_friend_marker, Color.parseColor("#E53935"))); // Crimson Red Tint
+                style.addImage("green-marker", getTintedMarkerBitmap(R.drawable.ic_friend_marker, Color.parseColor("#4CAF50"))); // Vibrant Green Tint
+
+                // 2. Setup the SymbolManager for adding markers
                 symbolManager = new SymbolManager(mapView, map, style);
                 symbolManager.setIconAllowOverlap(true);
                 symbolManager.setTextAllowOverlap(true);
                 symbolManager.setIconIgnorePlacement(true);
                 symbolManager.setTextIgnorePlacement(true);
-
-                // Add Red and Green marker images programmatically (Enlarged to 128px for excellent visibility)
-                style.addImage("red-marker", createMarkerBitmap(Color.parseColor("#E53935"))); // Crimson Red
-                style.addImage("green-marker", createMarkerBitmap(Color.parseColor("#4CAF50"))); // Vibrant Green
 
                 // Define Base Point: Cochin, Kerala, India (beautiful area with clear map layers)
                 double baseLat = 9.93123;
@@ -88,7 +91,7 @@ public class MainActivity extends AppCompatActivity {
                         .withIconImage("red-marker")
                         .withIconSize(1.0f)
                         .withTextField("Red Point (~1km)")
-                        .withTextColor("#E53935")
+                        .withTextColor("red")
                         .withTextSize(12f)
                         .withTextOffset(new Float[]{0f, 1.8f});
 
@@ -98,7 +101,7 @@ public class MainActivity extends AppCompatActivity {
                         .withIconImage("green-marker")
                         .withIconSize(1.0f)
                         .withTextField("Green Point (~1km)")
-                        .withTextColor("#4CAF50")
+                        .withTextColor("green")
                         .withTextSize(12f)
                         .withTextOffset(new Float[]{0f, 1.8f});
 
@@ -111,7 +114,7 @@ public class MainActivity extends AppCompatActivity {
                         (redLatLng.getLongitude() + greenLatLng.getLongitude()) / 2.0
                 );
 
-                // Safe Camera Centering: moveCamera(newLatLngZoom) is synchronous, layout size-independent,
+                // Safe Initial Camera Centering: moveCamera(newLatLngZoom) is synchronous, layout size-independent,
                 // and 100% immune to IllegalArgumentExceptions from zero-measured layout passes.
                 mapLibreMap.moveCamera(CameraUpdateFactory.newLatLngZoom(midpoint, 14.5));
 
@@ -152,13 +155,6 @@ public class MainActivity extends AppCompatActivity {
                 symbolManager.update(redSymbol);
                 symbolManager.update(greenSymbol);
 
-                // Center camera smoothly on the new midpoint
-                LatLng midpoint = new LatLng(
-                        (redLatLng.getLatitude() + greenLatLng.getLatitude()) / 2.0,
-                        (redLatLng.getLongitude() + greenLatLng.getLongitude()) / 2.0
-                );
-                mapLibreMap.animateCamera(CameraUpdateFactory.newLatLng(midpoint));
-
                 // Repeat every 1 second
                 movementHandler.postDelayed(this, 1000L);
             }
@@ -178,8 +174,40 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * Programmatically generates a premium, high-resolution circular GPS beacon bitmap
-     * with an outer drop shadow, a white border, a main color ring, and a bright white core dot.
+     * Programmatically tints an existing project drawable asset to a custom color
+     * and converts it to a high-resolution Bitmap.
+     */
+    private Bitmap getTintedMarkerBitmap(int drawableId, int tintColor) {
+        Drawable drawable = ContextCompat.getDrawable(this, drawableId);
+        if (drawable == null) {
+            return createMarkerBitmap(tintColor); // Fallback to programmatic circle if resource missing
+        }
+
+        // Wrap and mutate the drawable to safely apply the tint color
+        drawable = DrawableCompat.wrap(drawable).mutate();
+        DrawableCompat.setTint(drawable, tintColor);
+
+        int width = drawable.getIntrinsicWidth() > 0 ? drawable.getIntrinsicWidth() : 128;
+        int height = drawable.getIntrinsicHeight() > 0 ? drawable.getIntrinsicHeight() : 128;
+
+        // Bound dimensions to optimized standard size (128x128 max)
+        int maxSize = 128;
+        if (width > maxSize || height > maxSize) {
+            float ratio = Math.min((float) maxSize / width, (float) maxSize / height);
+            width = Math.round(width * ratio);
+            height = Math.round(height * ratio);
+        }
+
+        Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        drawable.setBounds(0, 0, canvas.getWidth(), canvas.getHeight());
+        drawable.draw(canvas);
+
+        return bitmap;
+    }
+
+    /**
+     * Programmatically generates a circular pin/marker bitmap as fallback.
      */
     private Bitmap createMarkerBitmap(int color) {
         int size = 128;
