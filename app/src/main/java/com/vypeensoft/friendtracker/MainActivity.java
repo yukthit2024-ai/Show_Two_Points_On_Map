@@ -25,6 +25,16 @@ public class MainActivity extends AppCompatActivity {
     private MapLibreMap mapLibreMap;
     private SymbolManager symbolManager;
 
+    // Coordinate state & Symbol references
+    private LatLng redLatLng;
+    private LatLng greenLatLng;
+    private org.maplibre.android.plugins.annotation.Symbol redSymbol;
+    private org.maplibre.android.plugins.annotation.Symbol greenSymbol;
+
+    // Movement Loop Handler
+    private final android.os.Handler movementHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private Runnable movementRunnable;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -69,13 +79,8 @@ public class MainActivity extends AppCompatActivity {
                 double deltaLat = (distanceKm / 111.12) * Math.cos(angle);
                 double deltaLon = ((distanceKm / 111.12) * Math.sin(angle)) / Math.cos(Math.toRadians(baseLat));
 
-                double redLat = baseLat;
-                double redLon = baseLon;
-                double greenLat = baseLat + deltaLat;
-                double greenLon = baseLon + deltaLon;
-
-                LatLng redLatLng = new LatLng(redLat, redLon);
-                LatLng greenLatLng = new LatLng(greenLat, greenLon);
+                redLatLng = new LatLng(baseLat, baseLon);
+                greenLatLng = new LatLng(baseLat + deltaLat, baseLon + deltaLon);
 
                 // Create the Red Point marker
                 SymbolOptions redOptions = new SymbolOptions()
@@ -97,8 +102,8 @@ public class MainActivity extends AppCompatActivity {
                         .withTextSize(12f)
                         .withTextOffset(new Float[]{0f, 1.5f});
 
-                symbolManager.create(redOptions);
-                symbolManager.create(greenOptions);
+                redSymbol = symbolManager.create(redOptions);
+                greenSymbol = symbolManager.create(greenOptions);
 
                 // Adjust camera view bounds to perfectly fit both markers on screen with 150px padding
                 LatLngBounds bounds = new LatLngBounds.Builder()
@@ -109,10 +114,68 @@ public class MainActivity extends AppCompatActivity {
                 mapView.postDelayed(() -> {
                     if (!isDestroyed()) {
                         mapLibreMap.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, 150));
+                        // Start the loop after the initial framing is complete
+                        startMovementLoop();
                     }
                 }, 500); // Slight delay to ensure layout is complete
             });
         });
+    }
+
+    /**
+     * Spawns a repeating 1-second loop that moves both coordinates by exactly 1 meter
+     * in a random direction, maintaining their 1km relative separation.
+     */
+    private void startMovementLoop() {
+        if (movementRunnable != null) return; // Already running
+
+        movementRunnable = new Runnable() {
+            @Override
+            public void run() {
+                if (isDestroyed() || redSymbol == null || greenSymbol == null) return;
+
+                // Move by 1 meter in a random direction
+                double angle = Math.random() * 2 * Math.PI;
+
+                // 1 meter = 0.001 kilometer
+                double distanceKm = 0.001; 
+                double avgLat = (redLatLng.getLatitude() + greenLatLng.getLatitude()) / 2.0;
+                double deltaLat = (distanceKm / 111.12) * Math.cos(angle);
+                double deltaLon = ((distanceKm / 111.12) * Math.sin(angle)) / Math.cos(Math.toRadians(avgLat));
+
+                // Translate both coordinates by the exact same delta vector
+                redLatLng = new LatLng(redLatLng.getLatitude() + deltaLat, redLatLng.getLongitude() + deltaLon);
+                greenLatLng = new LatLng(greenLatLng.getLatitude() + deltaLat, greenLatLng.getLongitude() + deltaLon);
+
+                // Update marker positions on the Map
+                redSymbol.setLatLng(redLatLng);
+                greenSymbol.setLatLng(greenLatLng);
+                symbolManager.update(redSymbol);
+                symbolManager.update(greenSymbol);
+
+                // Center camera smoothly on the new midpoint
+                LatLng midpoint = new LatLng(
+                        (redLatLng.getLatitude() + greenLatLng.getLatitude()) / 2.0,
+                        (redLatLng.getLongitude() + greenLatLng.getLongitude()) / 2.0
+                );
+                mapLibreMap.animateCamera(CameraUpdateFactory.newLatLng(midpoint));
+
+                // Repeat every 1 second
+                movementHandler.postDelayed(this, 1000L);
+            }
+        };
+
+        movementHandler.post(movementRunnable);
+    }
+
+    /**
+     * Removes the loop execution task safely.
+     */
+    private void stopMovementLoop() {
+        if (movementRunnable != null) {
+            movementHandler.removeCallbacks(movementRunnable);
+            movementRunnable = null;
+        }
     }
 
     /**
@@ -152,12 +215,16 @@ public class MainActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         mapView.onResume();
+        if (redSymbol != null && greenSymbol != null) {
+            startMovementLoop();
+        }
     }
 
     @Override
     protected void onPause() {
         super.onPause();
         mapView.onPause();
+        stopMovementLoop();
     }
 
     @Override
@@ -170,6 +237,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         mapView.onDestroy();
+        stopMovementLoop();
     }
 
     @Override
