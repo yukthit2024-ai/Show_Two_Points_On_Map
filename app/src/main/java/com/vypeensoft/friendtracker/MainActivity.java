@@ -121,6 +121,7 @@ public class MainActivity extends AppCompatActivity {
         });
 
         matrixClient = new MatrixClient(this);
+        loadMatrixCredentialsOnStartup();
 
         mapView.getMapAsync(map -> {
             this.mapLibreMap = map;
@@ -704,6 +705,113 @@ public class MainActivity extends AppCompatActivity {
         return input;
     }
 
+    private void loadMatrixCredentialsOnStartup() {
+        java.io.File file = new java.io.File("/sdcard/Vypeensoft/Friends_Location_Tracker/settings/matrix_credentails.json");
+        if (!file.exists()) {
+            file = new java.io.File(android.os.Environment.getExternalStorageDirectory(), "Vypeensoft/Friends_Location_Tracker/settings/matrix_credentails.json");
+        }
+
+        if (file.exists()) {
+            try {
+                java.io.BufferedReader br = new java.io.BufferedReader(new java.io.FileReader(file));
+                StringBuilder sb = new StringBuilder();
+                String line;
+                while ((line = br.readLine()) != null) {
+                    sb.append(line);
+                }
+                br.close();
+
+                org.json.JSONObject obj = new org.json.JSONObject(sb.toString());
+                android.content.SharedPreferences prefs = getSharedPreferences(MatrixClient.PREFS_NAME, MODE_PRIVATE);
+                android.content.SharedPreferences.Editor editor = prefs.edit();
+
+                if (obj.has("matrix_homeserver")) editor.putString(MatrixClient.KEY_MATRIX_HOMESERVER, obj.getString("matrix_homeserver"));
+                if (obj.has("matrix_username")) editor.putString(MatrixClient.KEY_MATRIX_USERNAME, obj.getString("matrix_username"));
+                if (obj.has("matrix_password")) editor.putString(MatrixClient.KEY_MATRIX_PASSWORD, obj.getString("matrix_password"));
+                if (obj.has("matrix_token")) editor.putString(MatrixClient.KEY_MATRIX_TOKEN, obj.getString("matrix_token"));
+                if (obj.has("matrix_display_name")) editor.putString(MatrixClient.KEY_MATRIX_DISPLAY_NAME, obj.getString("matrix_display_name"));
+                if (obj.has("matrix_polling_period")) {
+                    editor.putLong(MatrixClient.KEY_MATRIX_POLLING_PERIOD, obj.getLong("matrix_polling_period"));
+                }
+                editor.apply();
+                if (matrixClient != null) {
+                    matrixClient.loadConfig(this);
+                }
+            } catch (Exception e) {
+                android.util.Log.e("FriendTracker", "Error loading credentials from JSON file on startup", e);
+            }
+        }
+    }
+
+    private void loadMatrixCredentialsFromFile(
+            android.widget.EditText editHomeserver,
+            android.widget.EditText editUsername,
+            android.widget.EditText editPassword,
+            android.widget.EditText editToken,
+            android.widget.EditText editDisplayName,
+            android.widget.EditText editPollPeriod) {
+        java.io.File file = new java.io.File("/sdcard/Vypeensoft/Friends_Location_Tracker/settings/matrix_credentails.json");
+        if (!file.exists()) {
+            file = new java.io.File(android.os.Environment.getExternalStorageDirectory(), "Vypeensoft/Friends_Location_Tracker/settings/matrix_credentails.json");
+        }
+
+        if (file.exists()) {
+            try {
+                java.io.BufferedReader br = new java.io.BufferedReader(new java.io.FileReader(file));
+                StringBuilder sb = new StringBuilder();
+                String line;
+                while ((line = br.readLine()) != null) {
+                    sb.append(line);
+                }
+                br.close();
+
+                org.json.JSONObject obj = new org.json.JSONObject(sb.toString());
+                if (obj.has("matrix_homeserver")) editHomeserver.setText(obj.getString("matrix_homeserver"));
+                if (obj.has("matrix_username")) editUsername.setText(obj.getString("matrix_username"));
+                if (obj.has("matrix_password")) editPassword.setText(obj.getString("matrix_password"));
+                if (obj.has("matrix_token")) editToken.setText(obj.getString("matrix_token"));
+                if (obj.has("matrix_display_name")) editDisplayName.setText(obj.getString("matrix_display_name"));
+                if (obj.has("matrix_polling_period")) {
+                    long periodMs = obj.getLong("matrix_polling_period");
+                    editPollPeriod.setText(String.valueOf(periodMs / 1000L));
+                }
+            } catch (Exception e) {
+                android.util.Log.e("FriendTracker", "Error loading credentials from JSON file", e);
+            }
+        }
+    }
+
+    private void saveMatrixCredentialsToFile(
+            String homeserver,
+            String username,
+            String password,
+            String token,
+            String displayName,
+            long pollingPeriodMs) {
+        try {
+            java.io.File dir = new java.io.File("/sdcard/Vypeensoft/Friends_Location_Tracker/settings");
+            if (!dir.exists()) {
+                dir.mkdirs();
+            }
+            java.io.File file = new java.io.File(dir, "matrix_credentails.json");
+
+            org.json.JSONObject obj = new org.json.JSONObject();
+            obj.put("matrix_homeserver", homeserver);
+            obj.put("matrix_username", username);
+            obj.put("matrix_password", password);
+            obj.put("matrix_token", token);
+            obj.put("matrix_display_name", displayName);
+            obj.put("matrix_polling_period", pollingPeriodMs);
+
+            java.io.FileWriter writer = new java.io.FileWriter(file);
+            writer.write(obj.toString(4));
+            writer.flush();
+            writer.close();
+        } catch (Exception e) {
+            android.util.Log.e("FriendTracker", "Error saving credentials to JSON file", e);
+        }
+    }
+
     private void showMatrixCredentialsDialog() {
         android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(this);
         builder.setTitle("Matrix Credentials");
@@ -742,6 +850,9 @@ public class MainActivity extends AppCompatActivity {
         android.widget.EditText editPollPeriod = createInput(String.valueOf(currentPeriodMs / 1000L));
         editPollPeriod.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
         layout.addView(editPollPeriod);
+
+        // Load values from JSON file if it exists, over-writing SharedPreferences defaults
+        loadMatrixCredentialsFromFile(editHomeserver, editUsername, editPassword, editToken, editDisplayName, editPollPeriod);
 
         builder.setView(scrollView);
         builder.setPositiveButton("Save", (dialog, which) -> {
@@ -783,6 +894,10 @@ public class MainActivity extends AppCompatActivity {
             }
 
             editor.apply();
+
+            // Save to JSON file as well to keep them synchronized
+            saveMatrixCredentialsToFile(homeserver, username, password, token, displayName, pollPeriodMs);
+
             matrixClient.loadConfig(this);
             restartMatrixPolling();
             android.widget.Toast.makeText(this, "Credentials saved successfully", android.widget.Toast.LENGTH_SHORT).show();
