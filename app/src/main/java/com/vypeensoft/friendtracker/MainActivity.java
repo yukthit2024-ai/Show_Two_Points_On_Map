@@ -63,9 +63,15 @@ public class MainActivity extends AppCompatActivity {
             String styleUrl = "https://tiles.openfreemap.org/styles/liberty";
             map.setStyle(new Style.Builder().fromUri(styleUrl), style -> {
 
-                // Define Base Point: Cochin, Kerala, India (beautiful area with clear map layers)
-                double baseLat = 9.93123;
-                double baseLon = 76.26730;
+                // Choose a random famous city in the world to start the simulation
+                FamousCity selectedCity = FAMOUS_CITIES[(int) (Math.random() * FAMOUS_CITIES.length)];
+                double baseLat = selectedCity.latitude;
+                double baseLon = selectedCity.longitude;
+
+                // Show a nice Toast feedback to inform the user which city loaded
+                android.widget.Toast.makeText(MainActivity.this, 
+                        "Simulation started in: " + selectedCity.name, 
+                        android.widget.Toast.LENGTH_LONG).show();
 
                 // Random angle/bearing in radians
                 double angle = Math.random() * 2 * Math.PI;
@@ -457,4 +463,31 @@ public class MainActivity extends AppCompatActivity {
         super.onSaveInstanceState(outState);
         mapView.onSaveInstanceState(outState);
     }
+
+    private static class FamousCity {
+        final String name;
+        final double latitude;
+        final double longitude;
+
+        FamousCity(String name, double latitude, double longitude) {
+            this.name = name;
+            this.latitude = latitude;
+            this.longitude = longitude;
+        }
+    }
+
+    private static final FamousCity[] FAMOUS_CITIES = {
+        new FamousCity("New York City, USA", 40.7128, -74.0060),
+        new FamousCity("Tokyo, Japan", 35.6762, 139.6503),
+        new FamousCity("Paris, France", 48.8566, 2.3522),
+        new FamousCity("London, UK", 51.5074, -0.1278),
+        new FamousCity("Sydney, Australia", -33.8688, 151.2093),
+        new FamousCity("Rio de Janeiro, Brazil", -22.9068, -43.1729),
+        new FamousCity("Rome, Italy", 41.9028, 12.4964),
+        new FamousCity("Cairo, Egypt", 30.0444, 31.2357),
+        new FamousCity("San Francisco, USA", 37.7749, -122.4194),
+        new FamousCity("Mumbai, India", 19.0760, 72.8777),
+        new FamousCity("Cape Town, South Africa", -33.9249, 18.4241),
+        new FamousCity("Cochin, India", 9.9312, 76.2673)
+    };
 }
