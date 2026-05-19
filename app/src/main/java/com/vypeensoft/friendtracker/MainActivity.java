@@ -30,6 +30,8 @@ public class MainActivity extends AppCompatActivity {
     // Dynamic tracking maps
     private final java.util.Map<String, Marker> activeMarkers = new java.util.HashMap<>();
     private final java.util.Map<String, String> activeMarkerColors = new java.util.HashMap<>();
+    private final java.util.Map<String, UserLocation> cachedLocations = new java.util.HashMap<>();
+    private final java.util.Map<String, Long> fileLastModifiedMap = new java.util.HashMap<>();
     private boolean isFirstCameraCenter = true;
 
     // Movement Loop Handler
@@ -210,8 +212,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private java.util.List<UserLocation> readUserLocationsFromFiles() {
-        java.util.List<UserLocation> locations = new java.util.ArrayList<>();
-        
         java.io.File dir = new java.io.File("/sdcard/Vypeensoft/Friends_Location_Tracker/sessions");
         if (!dir.exists()) {
             dir = new java.io.File(android.os.Environment.getExternalStorageDirectory(), "Vypeensoft/Friends_Location_Tracker/sessions");
@@ -220,20 +220,52 @@ public class MainActivity extends AppCompatActivity {
         // Auto-create directory and create sample files if empty so it works out of the box
         createSampleFilesIfEmpty(dir);
 
+        java.util.Set<String> currentFilePaths = new java.util.HashSet<>();
+
         if (dir.exists() && dir.isDirectory()) {
             java.io.File[] files = dir.listFiles();
             if (files != null) {
                 for (java.io.File file : files) {
                     if (file.isFile()) {
-                        UserLocation loc = parseLocationFile(file);
-                        if (loc != null) {
-                            locations.add(loc);
+                        String filePath = file.getAbsolutePath();
+                        currentFilePaths.add(filePath);
+
+                        long lastModified = file.lastModified();
+                        Long previousModified = fileLastModifiedMap.get(filePath);
+
+                        // If file is new or modified, re-read and parse it
+                        if (previousModified == null || lastModified > previousModified) {
+                            UserLocation loc = parseLocationFile(file);
+                            if (loc != null) {
+                                cachedLocations.put(filePath, loc);
+                                fileLastModifiedMap.put(filePath, lastModified);
+                                android.util.Log.d("FriendTracker", "File changed: " + file.getName() + ", re-reading and updating map.");
+                            }
                         }
                     }
                 }
             }
         }
-        return locations;
+
+        // Clean up cached data for files that were deleted
+        java.util.Iterator<java.util.Map.Entry<String, UserLocation>> locIt = cachedLocations.entrySet().iterator();
+        while (locIt.hasNext()) {
+            java.util.Map.Entry<String, UserLocation> entry = locIt.next();
+            if (!currentFilePaths.contains(entry.getKey())) {
+                locIt.remove();
+            }
+        }
+
+        java.util.Iterator<java.util.Map.Entry<String, Long>> modIt = fileLastModifiedMap.entrySet().iterator();
+        while (modIt.hasNext()) {
+            java.util.Map.Entry<String, Long> entry = modIt.next();
+            if (!currentFilePaths.contains(entry.getKey())) {
+                modIt.remove();
+            }
+        }
+
+        // Return a list of all current locations
+        return new java.util.ArrayList<>(cachedLocations.values());
     }
 
     private UserLocation parseLocationFile(java.io.File file) {
