@@ -22,6 +22,10 @@ import org.maplibre.android.maps.MapView;
 import org.maplibre.android.maps.MapLibreMap;
 import org.maplibre.android.maps.Style;
 
+import com.vypeensoft.friendtracker.model.GroupRoom;
+import com.vypeensoft.friendtracker.model.LocationMessage;
+import com.vypeensoft.friendtracker.network.MatrixClient;
+
 public class MainActivity extends AppCompatActivity {
 
     private MapView mapView;
@@ -34,9 +38,24 @@ public class MainActivity extends AppCompatActivity {
     private final java.util.Map<String, Long> fileLastModifiedMap = new java.util.HashMap<>();
     private boolean isFirstCameraCenter = true;
 
+    // Navigation Drawer views
+    private androidx.drawerlayout.widget.DrawerLayout drawerLayout;
+    private android.widget.ImageButton btnMenu;
+    private android.view.View menuSettings;
+    private android.view.View menuMatrixCredentials;
+    private android.view.View menuMatrixRooms;
+    private android.view.View menuHelp;
+    private android.view.View menuAbout;
+
     // Movement Loop Handler
     private final android.os.Handler movementHandler = new android.os.Handler(android.os.Looper.getMainLooper());
     private Runnable movementRunnable;
+
+    // Matrix Polling
+    private MatrixClient matrixClient;
+    private final android.os.Handler matrixHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private Runnable matrixRunnable;
+    private final java.util.Map<String, Long> lastRoomEventTimestamps = new java.util.HashMap<>();
 
     private static class UserLocation {
         final String username;
@@ -64,6 +83,44 @@ public class MainActivity extends AppCompatActivity {
 
         mapView = findViewById(R.id.mapView);
         mapView.onCreate(savedInstanceState);
+
+        // Setup Drawer Controls
+        drawerLayout = findViewById(R.id.drawer_layout);
+        btnMenu = findViewById(R.id.btn_menu);
+        menuSettings = findViewById(R.id.menu_settings);
+        menuMatrixCredentials = findViewById(R.id.menu_matrix_credentials);
+        menuMatrixRooms = findViewById(R.id.menu_matrix_rooms);
+        menuHelp = findViewById(R.id.menu_help);
+        menuAbout = findViewById(R.id.menu_about);
+
+        btnMenu.setOnClickListener(v -> drawerLayout.openDrawer(android.view.Gravity.LEFT));
+
+        menuSettings.setOnClickListener(v -> {
+            drawerLayout.closeDrawers();
+            showSettingsDialog();
+        });
+
+        menuMatrixCredentials.setOnClickListener(v -> {
+            drawerLayout.closeDrawers();
+            showMatrixCredentialsDialog();
+        });
+
+        menuMatrixRooms.setOnClickListener(v -> {
+            drawerLayout.closeDrawers();
+            showMatrixRoomsDialog();
+        });
+
+        menuHelp.setOnClickListener(v -> {
+            drawerLayout.closeDrawers();
+            showHelpDialog();
+        });
+
+        menuAbout.setOnClickListener(v -> {
+            drawerLayout.closeDrawers();
+            showAboutDialog();
+        });
+
+        matrixClient = new MatrixClient(this);
 
         mapView.getMapAsync(map -> {
             this.mapLibreMap = map;
@@ -203,8 +260,11 @@ public class MainActivity extends AppCompatActivity {
                     mapView.invalidate();
                 }
 
-                // Repeat every 1 second (1000ms)
-                movementHandler.postDelayed(this, 1000L);
+                // Repeat according to saved polling_interval
+                android.content.SharedPreferences prefs = getSharedPreferences("friend_tracker_prefs", MODE_PRIVATE);
+                int intervalSec = prefs.getInt("polling_interval", 1);
+                if (intervalSec < 1) intervalSec = 1;
+                movementHandler.postDelayed(this, intervalSec * 1000L);
             }
         };
 
@@ -478,6 +538,7 @@ public class MainActivity extends AppCompatActivity {
         if (mapLibreMap != null) {
             startMovementLoop();
         }
+        startMatrixPolling();
     }
 
     @Override
@@ -485,6 +546,7 @@ public class MainActivity extends AppCompatActivity {
         super.onPause();
         mapView.onPause();
         stopMovementLoop();
+        stopMatrixPolling();
     }
 
     @Override
@@ -498,6 +560,7 @@ public class MainActivity extends AppCompatActivity {
         super.onDestroy();
         mapView.onDestroy();
         stopMovementLoop();
+        stopMatrixPolling();
     }
 
     @Override
@@ -512,30 +575,614 @@ public class MainActivity extends AppCompatActivity {
         mapView.onSaveInstanceState(outState);
     }
 
-    private static class FamousCity {
-        final String name;
-        final double latitude;
-        final double longitude;
+    // ==========================================
+    // MATRIX INTEGRATION HELPER METHODS & WIDGETS
+    // ==========================================
 
-        FamousCity(String name, double latitude, double longitude) {
-            this.name = name;
-            this.latitude = latitude;
-            this.longitude = longitude;
+    private int getUniqueColorForUser(String userId) {
+        if (userId == null || userId.isEmpty()) {
+            return Color.parseColor("#00E5FF"); // Neon Cyan fallback
+        }
+        int hash = userId.hashCode();
+        float hue = 60f + Math.abs(hash % 240);
+        float saturation = 0.90f;
+        float value = 0.85f;
+        return Color.HSVToColor(new float[]{hue, saturation, value});
+    }
+
+    private void updateFriendMarker(String username, double latitude, double longitude) {
+        if (mapLibreMap == null) return;
+        LatLng position = new LatLng(latitude, longitude);
+        Marker marker = activeMarkers.get(username);
+        IconFactory iconFactory = IconFactory.getInstance(MainActivity.this);
+        int color = getUniqueColorForUser(username);
+
+        if (marker == null) {
+            Icon icon = iconFactory.fromBitmap(createTeardropMarkerBitmap(color, username));
+            Marker newMarker = mapLibreMap.addMarker(new MarkerOptions()
+                    .position(position)
+                    .title(username)
+                    .icon(icon));
+            activeMarkers.put(username, newMarker);
+            activeMarkerColors.put(username, "MatrixUnique");
+        } else {
+            marker.setPosition(position);
+        }
+        mapView.invalidate();
+    }
+
+    private java.util.List<GroupRoom> loadMatrixRooms() {
+        java.util.List<GroupRoom> rooms = new java.util.ArrayList<>();
+        android.content.SharedPreferences prefs = getSharedPreferences(MatrixClient.PREFS_NAME, MODE_PRIVATE);
+        String jsonStr = prefs.getString(MatrixClient.KEY_MATRIX_ROOMS, null);
+        if (jsonStr == null || jsonStr.trim().isEmpty()) {
+            rooms.add(new GroupRoom("General Room", "!sample_room_id:matrix.org", true));
+            saveMatrixRooms(rooms);
+            return rooms;
+        }
+
+        try {
+            com.google.gson.Gson gson = new com.google.gson.Gson();
+            java.lang.reflect.Type type = new com.google.gson.reflect.TypeToken<java.util.ArrayList<GroupRoom>>() {}.getType();
+            java.util.List<GroupRoom> loaded = gson.fromJson(jsonStr, type);
+            if (loaded != null) {
+                rooms.addAll(loaded);
+            }
+        } catch (Exception e) {
+            android.util.Log.e("FriendTracker", "Error loading matrix rooms", e);
+        }
+        return rooms;
+    }
+
+    private void saveMatrixRooms(java.util.List<GroupRoom> rooms) {
+        try {
+            com.google.gson.Gson gson = new com.google.gson.Gson();
+            String jsonStr = gson.toJson(rooms);
+            getSharedPreferences(MatrixClient.PREFS_NAME, MODE_PRIVATE)
+                    .edit()
+                    .putString(MatrixClient.KEY_MATRIX_ROOMS, jsonStr)
+                    .apply();
+        } catch (Exception e) {
+            android.util.Log.e("FriendTracker", "Error saving matrix rooms", e);
         }
     }
 
-    private static final FamousCity[] FAMOUS_CITIES = {
-        new FamousCity("New York City, USA", 40.7128, -74.0060),
-        new FamousCity("Tokyo, Japan", 35.6762, 139.6503),
-        new FamousCity("Paris, France", 48.8566, 2.3522),
-        new FamousCity("London, UK", 51.5074, -0.1278),
-        new FamousCity("Sydney, Australia", -33.8688, 151.2093),
-        new FamousCity("Rio de Janeiro, Brazil", -22.9068, -43.1729),
-        new FamousCity("Rome, Italy", 41.9028, 12.4964),
-        new FamousCity("Cairo, Egypt", 30.0444, 31.2357),
-        new FamousCity("San Francisco, USA", 37.7749, -122.4194),
-        new FamousCity("Mumbai, India", 19.0760, 72.8777),
-        new FamousCity("Cape Town, South Africa", -33.9249, 18.4241),
-        new FamousCity("Cochin, India", 9.9312, 76.2673)
-    };
+    private void showSettingsDialog() {
+        android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(this);
+        builder.setTitle("Application Settings");
+
+        android.widget.LinearLayout layout = new android.widget.LinearLayout(this);
+        layout.setOrientation(android.widget.LinearLayout.VERTICAL);
+        layout.setPadding(48, 36, 48, 36);
+
+        android.widget.TextView label = new android.widget.TextView(this);
+        label.setText("GPS Files Polling Interval (seconds)");
+        label.setTextColor(Color.parseColor("#78909C"));
+        label.setTextSize(13);
+        label.setPadding(0, 0, 0, 8);
+        layout.addView(label);
+
+        android.widget.EditText input = new android.widget.EditText(this);
+        android.content.SharedPreferences prefs = getSharedPreferences(MatrixClient.PREFS_NAME, MODE_PRIVATE);
+        int currentInterval = prefs.getInt("polling_interval", 1);
+        input.setText(String.valueOf(currentInterval));
+        input.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        layout.addView(input);
+
+        builder.setView(layout);
+        builder.setPositiveButton("Save", (dialog, which) -> {
+            try {
+                int newVal = Integer.parseInt(input.getText().toString().trim());
+                if (newVal < 1) newVal = 1;
+                prefs.edit().putInt("polling_interval", newVal).apply();
+                android.widget.Toast.makeText(this, "Settings saved successfully", android.widget.Toast.LENGTH_SHORT).show();
+                stopMovementLoop();
+                startMovementLoop();
+            } catch (Exception e) {
+                android.widget.Toast.makeText(this, "Invalid interval", android.widget.Toast.LENGTH_SHORT).show();
+            }
+        });
+        builder.setNegativeButton("Cancel", null);
+        builder.show();
+    }
+
+    private android.widget.TextView createLabel(String text) {
+        android.widget.TextView label = new android.widget.TextView(this);
+        label.setText(text);
+        label.setTextColor(Color.parseColor("#78909C"));
+        label.setTextSize(13);
+        label.setPadding(0, 16, 0, 4);
+        return label;
+    }
+
+    private android.widget.EditText createInput(String value) {
+        android.widget.EditText input = new android.widget.EditText(this);
+        input.setText(value);
+        input.setTextColor(Color.parseColor("#263238"));
+        input.setTextSize(16);
+        return input;
+    }
+
+    private void showMatrixCredentialsDialog() {
+        android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(this);
+        builder.setTitle("Matrix Credentials");
+
+        android.widget.ScrollView scrollView = new android.widget.ScrollView(this);
+        android.widget.LinearLayout layout = new android.widget.LinearLayout(this);
+        layout.setOrientation(android.widget.LinearLayout.VERTICAL);
+        layout.setPadding(48, 36, 48, 36);
+        scrollView.addView(layout);
+
+        android.content.SharedPreferences prefs = getSharedPreferences(MatrixClient.PREFS_NAME, MODE_PRIVATE);
+
+        layout.addView(createLabel("Homeserver URL"));
+        android.widget.EditText editHomeserver = createInput(prefs.getString(MatrixClient.KEY_MATRIX_HOMESERVER, "https://matrix-client.matrix.org"));
+        layout.addView(editHomeserver);
+
+        layout.addView(createLabel("Username"));
+        android.widget.EditText editUsername = createInput(prefs.getString(MatrixClient.KEY_MATRIX_USERNAME, ""));
+        layout.addView(editUsername);
+
+        layout.addView(createLabel("Password"));
+        android.widget.EditText editPassword = createInput(prefs.getString(MatrixClient.KEY_MATRIX_PASSWORD, ""));
+        editPassword.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        layout.addView(editPassword);
+
+        layout.addView(createLabel("Access Token (Cached)"));
+        android.widget.EditText editToken = createInput(prefs.getString(MatrixClient.KEY_MATRIX_TOKEN, ""));
+        layout.addView(editToken);
+
+        layout.addView(createLabel("Display Name"));
+        android.widget.EditText editDisplayName = createInput(prefs.getString(MatrixClient.KEY_MATRIX_DISPLAY_NAME, ""));
+        layout.addView(editDisplayName);
+
+        layout.addView(createLabel("Polling Period (seconds)"));
+        long currentPeriodMs = prefs.getLong(MatrixClient.KEY_MATRIX_POLLING_PERIOD, 5000L);
+        android.widget.EditText editPollPeriod = createInput(String.valueOf(currentPeriodMs / 1000L));
+        editPollPeriod.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        layout.addView(editPollPeriod);
+
+        builder.setView(scrollView);
+        builder.setPositiveButton("Save", (dialog, which) -> {
+            String homeserver = editHomeserver.getText().toString().trim();
+            String username = editUsername.getText().toString().trim();
+            String password = editPassword.getText().toString().trim();
+            String token = editToken.getText().toString().trim();
+            String displayName = editDisplayName.getText().toString().trim();
+            String pollStr = editPollPeriod.getText().toString().trim();
+
+            if (homeserver.isEmpty()) {
+                android.widget.Toast.makeText(this, "Homeserver is required", android.widget.Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            long pollPeriodMs = 5000L;
+            try {
+                long pollSec = Long.parseLong(pollStr);
+                if (pollSec < 1) pollSec = 1;
+                pollPeriodMs = pollSec * 1000L;
+            } catch (Exception e) {
+                // use default
+            }
+
+            android.content.SharedPreferences.Editor editor = prefs.edit();
+            editor.putString(MatrixClient.KEY_MATRIX_HOMESERVER, homeserver);
+            editor.putString(MatrixClient.KEY_MATRIX_USERNAME, username);
+            editor.putString(MatrixClient.KEY_MATRIX_PASSWORD, password);
+            editor.putString(MatrixClient.KEY_MATRIX_DISPLAY_NAME, displayName);
+            editor.putLong(MatrixClient.KEY_MATRIX_POLLING_PERIOD, pollPeriodMs);
+
+            // If credentials changed, clear old cached token so it triggers login
+            String oldUser = prefs.getString(MatrixClient.KEY_MATRIX_USERNAME, "");
+            String oldPass = prefs.getString(MatrixClient.KEY_MATRIX_PASSWORD, "");
+            if (!oldUser.equals(username) || !oldPass.equals(password)) {
+                editor.remove(MatrixClient.KEY_MATRIX_TOKEN);
+            } else if (!token.isEmpty()) {
+                editor.putString(MatrixClient.KEY_MATRIX_TOKEN, token);
+            }
+
+            editor.apply();
+            matrixClient.loadConfig(this);
+            restartMatrixPolling();
+            android.widget.Toast.makeText(this, "Credentials saved successfully", android.widget.Toast.LENGTH_SHORT).show();
+        });
+        builder.setNegativeButton("Cancel", null);
+        builder.show();
+    }
+
+    private void showMatrixRoomsDialog() {
+        android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(this);
+        builder.setTitle("Matrix Rooms Manager");
+
+        android.widget.LinearLayout rootLayout = new android.widget.LinearLayout(this);
+        rootLayout.setOrientation(android.widget.LinearLayout.VERTICAL);
+        rootLayout.setPadding(36, 24, 36, 24);
+
+        android.widget.ScrollView scrollView = new android.widget.ScrollView(this);
+        android.widget.LinearLayout listLayout = new android.widget.LinearLayout(this);
+        listLayout.setOrientation(android.widget.LinearLayout.VERTICAL);
+        scrollView.addView(listLayout);
+
+        java.util.List<GroupRoom> rooms = loadMatrixRooms();
+
+        android.widget.LinearLayout headers = new android.widget.LinearLayout(this);
+        headers.setOrientation(android.widget.LinearLayout.HORIZONTAL);
+        headers.setPadding(0, 0, 0, 16);
+
+        android.widget.TextView headActive = new android.widget.TextView(this);
+        headActive.setText("Active");
+        headActive.setTextSize(14);
+        headActive.setTextColor(Color.parseColor("#37474F"));
+        headActive.setTypeface(null, android.graphics.Typeface.BOLD);
+        headActive.setLayoutParams(new android.widget.LinearLayout.LayoutParams(120, -2));
+        headers.addView(headActive);
+
+        android.widget.TextView headName = new android.widget.TextView(this);
+        headName.setText("Room Name");
+        headName.setTextSize(14);
+        headName.setTextColor(Color.parseColor("#37474F"));
+        headName.setTypeface(null, android.graphics.Typeface.BOLD);
+        headName.setLayoutParams(new android.widget.LinearLayout.LayoutParams(0, -2, 1.0f));
+        headers.addView(headName);
+
+        android.widget.TextView headId = new android.widget.TextView(this);
+        headId.setText("Room ID");
+        headId.setTextSize(14);
+        headId.setTextColor(Color.parseColor("#37474F"));
+        headId.setTypeface(null, android.graphics.Typeface.BOLD);
+        headId.setLayoutParams(new android.widget.LinearLayout.LayoutParams(0, -2, 1.2f));
+        headers.addView(headId);
+
+        android.view.View deleteHeadSpacer = new android.view.View(this);
+        deleteHeadSpacer.setLayoutParams(new android.widget.LinearLayout.LayoutParams(80, 1));
+        headers.addView(deleteHeadSpacer);
+
+        listLayout.addView(headers);
+
+        populateRoomsList(listLayout, rooms);
+
+        rootLayout.addView(scrollView, new android.widget.LinearLayout.LayoutParams(-1, 500));
+
+        android.widget.Button btnAdd = new android.widget.Button(this);
+        btnAdd.setText("+ Add Matrix Room");
+        btnAdd.setTextColor(Color.WHITE);
+        btnAdd.setBackgroundColor(Color.parseColor("#2E7D32"));
+        android.widget.LinearLayout.LayoutParams btnParams = new android.widget.LinearLayout.LayoutParams(-1, -2);
+        btnParams.setMargins(0, 24, 0, 0);
+        btnAdd.setLayoutParams(btnParams);
+        rootLayout.addView(btnAdd);
+
+        builder.setView(rootLayout);
+        builder.setPositiveButton("Close", null);
+
+        android.app.AlertDialog dialog = builder.create();
+
+        btnAdd.setOnClickListener(v -> {
+            showAddRoomDialog(listLayout, dialog);
+        });
+
+        dialog.show();
+    }
+
+    private void populateRoomsList(android.widget.LinearLayout listLayout, java.util.List<GroupRoom> rooms) {
+        int childCount = listLayout.getChildCount();
+        if (childCount > 1) {
+            listLayout.removeViews(1, childCount - 1);
+        }
+
+        if (rooms.isEmpty()) {
+            android.widget.TextView emptyText = new android.widget.TextView(this);
+            emptyText.setText("No registered rooms found.");
+            emptyText.setPadding(0, 32, 0, 32);
+            emptyText.setGravity(android.view.Gravity.CENTER);
+            emptyText.setTextColor(Color.GRAY);
+            listLayout.addView(emptyText);
+            return;
+        }
+
+        for (int i = 0; i < rooms.size(); i++) {
+            final GroupRoom room = rooms.get(i);
+            android.widget.LinearLayout row = new android.widget.LinearLayout(this);
+            row.setOrientation(android.widget.LinearLayout.HORIZONTAL);
+            row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+            row.setPadding(0, 12, 0, 12);
+            row.setBackground(createRowDividerDrawable());
+
+            android.widget.RadioButton rbActive = new android.widget.RadioButton(this);
+            rbActive.setChecked(room.isActive());
+            rbActive.setLayoutParams(new android.widget.LinearLayout.LayoutParams(120, -2));
+            rbActive.setOnClickListener(v -> {
+                for (GroupRoom r : rooms) {
+                    r.setActive(r == room);
+                }
+                saveMatrixRooms(rooms);
+                matrixClient.loadConfig(this);
+                populateRoomsList(listLayout, rooms);
+                restartMatrixPolling();
+                android.widget.Toast.makeText(this, "Active room set to: " + room.getName(), android.widget.Toast.LENGTH_SHORT).show();
+            });
+            row.addView(rbActive);
+
+            android.widget.TextView textName = new android.widget.TextView(this);
+            textName.setText(room.getName());
+            textName.setTextSize(14);
+            textName.setTextColor(Color.parseColor("#263238"));
+            textName.setLayoutParams(new android.widget.LinearLayout.LayoutParams(0, -2, 1.0f));
+            row.addView(textName);
+
+            android.widget.TextView textId = new android.widget.TextView(this);
+            textId.setText(room.getRoomId());
+            textId.setTextSize(13);
+            textId.setTextColor(Color.parseColor("#546E7A"));
+            textId.setLayoutParams(new android.widget.LinearLayout.LayoutParams(0, -2, 1.2f));
+            row.addView(textId);
+
+            android.widget.ImageButton btnDelete = new android.widget.ImageButton(this);
+            btnDelete.setImageResource(android.R.drawable.ic_menu_delete);
+            btnDelete.setBackground(null);
+            btnDelete.setLayoutParams(new android.widget.LinearLayout.LayoutParams(80, 80));
+            btnDelete.setOnClickListener(v -> {
+                boolean wasActive = room.isActive();
+                rooms.remove(room);
+                if (wasActive && !rooms.isEmpty()) {
+                    rooms.get(0).setActive(true);
+                }
+                saveMatrixRooms(rooms);
+                matrixClient.loadConfig(this);
+                populateRoomsList(listLayout, rooms);
+                restartMatrixPolling();
+                android.widget.Toast.makeText(this, "Room removed: " + room.getName(), android.widget.Toast.LENGTH_SHORT).show();
+            });
+            row.addView(btnDelete);
+
+            listLayout.addView(row);
+        }
+    }
+
+    private android.graphics.drawable.Drawable createRowDividerDrawable() {
+        android.graphics.drawable.GradientDrawable gd = new android.graphics.drawable.GradientDrawable();
+        gd.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
+        gd.setStroke(2, Color.parseColor("#ECEFF1"));
+        return gd;
+    }
+
+    private void showAddRoomDialog(android.widget.LinearLayout listLayout, android.app.AlertDialog parentDialog) {
+        android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(this);
+        builder.setTitle("Add Matrix Room");
+
+        android.widget.LinearLayout layout = new android.widget.LinearLayout(this);
+        layout.setOrientation(android.widget.LinearLayout.VERTICAL);
+        layout.setPadding(48, 36, 48, 36);
+
+        layout.addView(createLabel("Room Display Name"));
+        android.widget.EditText editName = createInput("");
+        layout.addView(editName);
+
+        layout.addView(createLabel("Room Identifier (e.g. !room:matrix.org)"));
+        android.widget.EditText editId = createInput("");
+        layout.addView(editId);
+
+        builder.setView(layout);
+        builder.setPositiveButton("Add", (dialog, which) -> {
+            String name = editName.getText().toString().trim();
+            String id = editId.getText().toString().trim();
+
+            if (!name.isEmpty() && !id.isEmpty()) {
+                java.util.List<GroupRoom> rooms = loadMatrixRooms();
+                boolean isFirst = rooms.isEmpty();
+                rooms.add(new GroupRoom(name, id, isFirst));
+                saveMatrixRooms(rooms);
+                matrixClient.loadConfig(this);
+                populateRoomsList(listLayout, rooms);
+                restartMatrixPolling();
+                android.widget.Toast.makeText(this, "Room added: " + name, android.widget.Toast.LENGTH_SHORT).show();
+            } else {
+                android.widget.Toast.makeText(this, "Both fields are required", android.widget.Toast.LENGTH_SHORT).show();
+            }
+        });
+        builder.setNegativeButton("Cancel", null);
+        builder.show();
+    }
+
+    private void showHelpDialog() {
+        android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(this);
+        builder.setTitle("Integration Help Guide");
+
+        android.widget.ScrollView scrollView = new android.widget.ScrollView(this);
+        android.widget.LinearLayout layout = new android.widget.LinearLayout(this);
+        layout.setOrientation(android.widget.LinearLayout.VERTICAL);
+        layout.setPadding(48, 36, 48, 36);
+        scrollView.addView(layout);
+
+        android.widget.TextView text = new android.widget.TextView(this);
+        text.setTextColor(Color.parseColor("#37474F"));
+        text.setTextSize(15);
+        text.setLineSpacing(6f, 1.2f);
+        text.setText(
+                "Welcome to Friend Location Tracker with Matrix Protocol!\n\n" +
+                "1. Storage Sessions:\n" +
+                "The app polls the external folder `/sdcard/Vypeensoft/Friends_Location_Tracker/sessions/` " +
+                "every second to read location files formatted as `Username|Latitude|Longitude|Color` and display them on the map.\n\n" +
+                "2. Matrix Chat Integration:\n" +
+                "You can configure Matrix Homeserver credentials in the drawer. The app polls the registered rooms on a background network thread " +
+                "using standard sync/messages APIs and detects incoming chat events in real-time.\n\n" +
+                "3. Rooms List:\n" +
+                "You can register and manage any number of Matrix rooms in the 'Matrix Rooms' screen using a dual-column layout."
+        );
+        layout.addView(text);
+
+        builder.setView(scrollView);
+        builder.setPositiveButton("Close", null);
+        builder.show();
+    }
+
+    private void showAboutDialog() {
+        android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(this);
+        builder.setTitle("About App");
+
+        android.widget.LinearLayout layout = new android.widget.LinearLayout(this);
+        layout.setOrientation(android.widget.LinearLayout.VERTICAL);
+        layout.setPadding(48, 48, 48, 48);
+        layout.setGravity(android.view.Gravity.CENTER_HORIZONTAL);
+
+        android.widget.TextView title = new android.widget.TextView(this);
+        title.setText("Friend Location Tracker");
+        title.setTextSize(20);
+        title.setTypeface(null, android.graphics.Typeface.BOLD);
+        title.setTextColor(Color.parseColor("#1E1E24"));
+        title.setPadding(0, 0, 0, 8);
+        layout.addView(title);
+
+        android.widget.TextView version = new android.widget.TextView(this);
+        version.setText("Version 1.0 (PRO Edition)");
+        version.setTextSize(14);
+        version.setTextColor(Color.parseColor("#78909C"));
+        version.setPadding(0, 0, 0, 24);
+        layout.addView(version);
+
+        android.widget.TextView buildInfo = new android.widget.TextView(this);
+        buildInfo.setText(
+                "Build Time: " + BuildConfig.BUILD_TIMESTAMP + "\n" +
+                "Git SHA: " + BuildConfig.GIT_SHA + "\n" +
+                "Build Type: Debug"
+        );
+        buildInfo.setTextSize(12);
+        buildInfo.setTextColor(Color.parseColor("#90A4AE"));
+        buildInfo.setGravity(android.view.Gravity.CENTER);
+        layout.addView(buildInfo);
+
+        builder.setView(layout);
+        builder.setPositiveButton("OK", null);
+        builder.show();
+    }
+
+    // ==========================================
+    // MATRIX BACKGROUND POLLING IMPLEMENTATION
+    // ==========================================
+
+    private void startMatrixPolling() {
+        if (matrixRunnable != null) return;
+
+        android.content.SharedPreferences prefs = getSharedPreferences(MatrixClient.PREFS_NAME, MODE_PRIVATE);
+        long pollPeriodMs = prefs.getLong(MatrixClient.KEY_MATRIX_POLLING_PERIOD, 5000L);
+
+        matrixRunnable = new Runnable() {
+            @Override
+            public void run() {
+                if (isDestroyed()) return;
+
+                if (matrixClient != null && matrixClient.isConfigured()) {
+                    matrixClient.fetchMessages(new MatrixClient.MatrixListener() {
+                        @Override
+                        public void onNewMessagesReceived(String rawJson) {
+                            runOnUiThread(() -> parseAndShowFriends(rawJson));
+                        }
+                    });
+                }
+
+                android.content.SharedPreferences currentPrefs = getSharedPreferences(MatrixClient.PREFS_NAME, MODE_PRIVATE);
+                long period = currentPrefs.getLong(MatrixClient.KEY_MATRIX_POLLING_PERIOD, 5000L);
+                matrixHandler.postDelayed(this, period);
+            }
+        };
+
+        matrixHandler.post(matrixRunnable);
+    }
+
+    private void stopMatrixPolling() {
+        if (matrixRunnable != null) {
+            matrixHandler.removeCallbacks(matrixRunnable);
+            matrixRunnable = null;
+        }
+    }
+
+    private void restartMatrixPolling() {
+        stopMatrixPolling();
+        startMatrixPolling();
+    }
+
+    private void parseAndShowFriends(String rawJson) {
+        try {
+            org.json.JSONObject obj = new org.json.JSONObject(rawJson);
+            org.json.JSONArray chunk = obj.optJSONArray("chunk");
+            if (chunk == null) return;
+
+            for (int i = chunk.length() - 1; i >= 0; i--) {
+                org.json.JSONObject event = chunk.getJSONObject(i);
+                String type = event.optString("type");
+                
+                if ("m.room.message".equals(type)) {
+                    final String sender = event.optString("sender");
+                    long originServerTs = event.optLong("origin_server_ts");
+                    org.json.JSONObject content = event.optJSONObject("content");
+                    
+                    if (content != null) {
+                        final String body = content.optString("body");
+                        
+                        Long lastTs = lastRoomEventTimestamps.get(matrixClient.getRoomId());
+                        if (lastTs == null || originServerTs > lastTs) {
+                            lastRoomEventTimestamps.put(matrixClient.getRoomId(), originServerTs);
+                            
+                            // Check if this is a location update message body format: userId|lat|lon|ts
+                            if (body != null && body.contains("|")) {
+                                String[] parts = body.split("\\|");
+                                if (parts.length >= 3) {
+                                    try {
+                                        String senderId = parts[0];
+                                        String myDisplayName = matrixClient.getDisplayName();
+                                        String myDefaultId = "user_" + android.os.Build.ID;
+                                        String myEffectiveId = (myDisplayName != null && !myDisplayName.isEmpty())
+                                                ? myDisplayName : myDefaultId;
+
+                                        if (!senderId.equals(myEffectiveId)) {
+                                            double friendLat = Double.parseDouble(parts[1]);
+                                            double friendLon = Double.parseDouble(parts[2]);
+                                            runOnUiThread(() -> {
+                                                updateFriendMarker(senderId, friendLat, friendLon);
+                                            });
+                                        }
+                                    } catch (Exception e) {
+                                        android.util.Log.e("FriendTracker", "Error parsing pipe delimited location", e);
+                                    }
+                                }
+                            }
+                            
+                            if (lastTs != null) {
+                                runOnUiThread(() -> {
+                                    // Find current room display name
+                                    java.util.List<GroupRoom> rooms = loadMatrixRooms();
+                                    String roomName = "Unknown";
+                                    for (GroupRoom r : rooms) {
+                                        if (r.getRoomId().equals(matrixClient.getRoomId())) {
+                                            roomName = r.getName();
+                                            break;
+                                        }
+                                    }
+                                    dispatchMatrixMessage(roomName, sender, body);
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            android.util.Log.e("FriendTracker", "Error parsing messages response", e);
+        }
+    }
+
+    private void dispatchMatrixMessage(String roomName, String sender, String body) {
+        android.util.Log.i("FriendTracker", "Matrix Message Received in room [" + roomName + "] from " + sender + ": " + body);
+
+        String cleanSender = sender;
+        if (sender.contains(":")) {
+            cleanSender = sender.split(":")[0];
+        }
+        if (cleanSender.startsWith("@")) {
+            cleanSender = cleanSender.substring(1);
+        }
+
+        android.widget.Toast.makeText(this, 
+                "💬 [" + roomName + "] " + cleanSender + ":\n" + body, 
+                android.widget.Toast.LENGTH_LONG).show();
+    }
 }

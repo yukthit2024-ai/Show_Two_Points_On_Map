@@ -3121,6 +3121,7 @@ drawable abc_vector_test
 drawable app_icon
 drawable avd_hide_password
 drawable avd_show_password
+drawable bg_floating_button
 drawable btn_checkbox_checked_mtrl
 drawable btn_checkbox_checked_to_unchecked_mtrl_animation
 drawable btn_checkbox_unchecked_mtrl
@@ -3156,6 +3157,7 @@ drawable design_snackbar_background
 drawable friend_marker
 drawable googleg_disabled_color_18
 drawable googleg_standard_color_18
+drawable ic_about
 drawable ic_arrow_back_black_24
 drawable ic_call_answer
 drawable ic_call_answer_low
@@ -3165,7 +3167,10 @@ drawable ic_call_decline
 drawable ic_call_decline_low
 drawable ic_clear_black_24
 drawable ic_clock_black_24dp
+drawable ic_credentials
 drawable ic_friend_marker
+drawable ic_hamburger
+drawable ic_help
 drawable ic_keyboard_black_24dp
 drawable ic_m3_chip_check
 drawable ic_m3_chip_checked_circle
@@ -3175,7 +3180,9 @@ drawable ic_mtrl_checked_circle
 drawable ic_mtrl_chip_checked_black
 drawable ic_mtrl_chip_checked_circle
 drawable ic_mtrl_chip_close_circle
+drawable ic_rooms
 drawable ic_search_black_24
+drawable ic_settings
 drawable m3_avd_hide_password
 drawable m3_avd_show_password
 drawable m3_bottom_sheet_drag_handle
@@ -3371,6 +3378,7 @@ id bounce
 id bounceBoth
 id bounceEnd
 id bounceStart
+id btn_menu
 id buttonPanel
 id cache_measures
 id callMeasure
@@ -3439,6 +3447,7 @@ id dragLeft
 id dragRight
 id dragStart
 id dragUp
+id drawer_layout
 id dropdown_menu
 id easeIn
 id easeInOut
@@ -3545,6 +3554,11 @@ id material_timepicker_ok_button
 id material_timepicker_view
 id material_value_index
 id matrix
+id menu_about
+id menu_help
+id menu_matrix_credentials
+id menu_matrix_rooms
+id menu_settings
 id message
 id middle
 id mini
@@ -3579,6 +3593,7 @@ id mtrl_picker_text_input_range_start
 id mtrl_picker_title_text
 id mtrl_view_tag_bottom_padding
 id multiply
+id nav_drawer_content
 id navigation_bar_item_active_indicator_view
 id navigation_bar_item_icon_container
 id navigation_bar_item_icon_view
