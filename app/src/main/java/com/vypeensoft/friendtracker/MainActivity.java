@@ -612,7 +612,79 @@ public class MainActivity extends AppCompatActivity {
         mapView.invalidate();
     }
 
+    private java.util.List<GroupRoom> loadMatrixRoomsFromFile() {
+        java.io.File file = new java.io.File("/sdcard/Vypeensoft/Friends_Location_Tracker/settings/rooms_settings.json");
+        if (!file.exists()) {
+            file = new java.io.File(android.os.Environment.getExternalStorageDirectory(), "Vypeensoft/Friends_Location_Tracker/settings/rooms_settings.json");
+        }
+
+        if (file.exists()) {
+            try {
+                java.io.BufferedReader br = new java.io.BufferedReader(new java.io.FileReader(file));
+                StringBuilder sb = new StringBuilder();
+                String line;
+                while ((line = br.readLine()) != null) {
+                    sb.append(line);
+                }
+                br.close();
+
+                org.json.JSONObject obj = new org.json.JSONObject(sb.toString());
+                if (obj.has("matrix_rooms")) {
+                    String roomsStr = obj.getString("matrix_rooms");
+                    com.google.gson.Gson gson = new com.google.gson.Gson();
+                    java.lang.reflect.Type type = new com.google.gson.reflect.TypeToken<java.util.ArrayList<GroupRoom>>() {}.getType();
+                    String sanitized = roomsStr.replace('\'', '"');
+                    java.util.List<GroupRoom> loaded = gson.fromJson(sanitized, type);
+                    if (loaded != null && !loaded.isEmpty()) {
+                        return loaded;
+                    }
+                }
+            } catch (Exception e) {
+                android.util.Log.e("FriendTracker", "Error loading matrix rooms from JSON file", e);
+            }
+        }
+        return null;
+    }
+
+    private void saveMatrixRoomsToFile(java.util.List<GroupRoom> rooms) {
+        try {
+            java.io.File dir = new java.io.File("/sdcard/Vypeensoft/Friends_Location_Tracker/settings");
+            if (!dir.exists()) {
+                dir.mkdirs();
+            }
+            java.io.File file = new java.io.File(dir, "rooms_settings.json");
+
+            com.google.gson.Gson gson = new com.google.gson.Gson();
+            String roomsJsonStr = gson.toJson(rooms);
+
+            org.json.JSONObject obj = new org.json.JSONObject();
+            obj.put("matrix_rooms", roomsJsonStr);
+
+            java.io.FileWriter writer = new java.io.FileWriter(file);
+            writer.write(obj.toString(4));
+            writer.flush();
+            writer.close();
+        } catch (Exception e) {
+            android.util.Log.e("FriendTracker", "Error saving matrix rooms to JSON file", e);
+        }
+    }
+
     private java.util.List<GroupRoom> loadMatrixRooms() {
+        java.util.List<GroupRoom> fileRooms = loadMatrixRoomsFromFile();
+        if (fileRooms != null) {
+            try {
+                com.google.gson.Gson gson = new com.google.gson.Gson();
+                String jsonStr = gson.toJson(fileRooms);
+                getSharedPreferences(MatrixClient.PREFS_NAME, MODE_PRIVATE)
+                        .edit()
+                        .putString(MatrixClient.KEY_MATRIX_ROOMS, jsonStr)
+                        .apply();
+            } catch (Exception e) {
+                // ignore
+            }
+            return fileRooms;
+        }
+
         java.util.List<GroupRoom> rooms = new java.util.ArrayList<>();
         android.content.SharedPreferences prefs = getSharedPreferences(MatrixClient.PREFS_NAME, MODE_PRIVATE);
         String jsonStr = prefs.getString(MatrixClient.KEY_MATRIX_ROOMS, null);
@@ -646,6 +718,7 @@ public class MainActivity extends AppCompatActivity {
         } catch (Exception e) {
             android.util.Log.e("FriendTracker", "Error saving matrix rooms", e);
         }
+        saveMatrixRoomsToFile(rooms);
     }
 
     private void showSettingsDialog() {
