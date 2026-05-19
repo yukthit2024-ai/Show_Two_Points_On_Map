@@ -29,10 +29,10 @@ com.vypeensoft.friendtracker.app-lifecycle-livedata-2.6.2-27 C:\Users\ShibuPC\.g
 com.vypeensoft.friendtracker.app-recyclerview-1.1.0-28 C:\Users\ShibuPC\.gradle\caches\transforms-3\e3eef4b78bf0d50dbb2eee57d07da5bb\transformed\recyclerview-1.1.0\res
 com.vypeensoft.friendtracker.app-fragment-1.8.2-29 C:\Users\ShibuPC\.gradle\caches\transforms-3\e4b4f1aa9287955332ae0157064e30ae\transformed\fragment-1.8.2\res
 com.vypeensoft.friendtracker.app-jetified-core-ktx-1.13.1-30 C:\Users\ShibuPC\.gradle\caches\transforms-3\ee9b1da2cd2a91568fb4caad506feb1e\transformed\jetified-core-ktx-1.13.1\res
-com.vypeensoft.friendtracker.app-pngs-31 X:\Projects_X\0_Active\8_Android_APK\Show_Two_Points_On_Map_APK_GITHUB\app\build\generated\res\pngs\debug
-com.vypeensoft.friendtracker.app-resValues-32 X:\Projects_X\0_Active\8_Android_APK\Show_Two_Points_On_Map_APK_GITHUB\app\build\generated\res\resValues\debug
-com.vypeensoft.friendtracker.app-packageDebugResources-33 X:\Projects_X\0_Active\8_Android_APK\Show_Two_Points_On_Map_APK_GITHUB\app\build\intermediates\incremental\debug\packageDebugResources\merged.dir
-com.vypeensoft.friendtracker.app-packageDebugResources-34 X:\Projects_X\0_Active\8_Android_APK\Show_Two_Points_On_Map_APK_GITHUB\app\build\intermediates\incremental\debug\packageDebugResources\stripped.dir
-com.vypeensoft.friendtracker.app-merged_res-35 X:\Projects_X\0_Active\8_Android_APK\Show_Two_Points_On_Map_APK_GITHUB\app\build\intermediates\merged_res\debug
-com.vypeensoft.friendtracker.app-debug-36 X:\Projects_X\0_Active\8_Android_APK\Show_Two_Points_On_Map_APK_GITHUB\app\src\debug\res
-com.vypeensoft.friendtracker.app-main-37 X:\Projects_X\0_Active\8_Android_APK\Show_Two_Points_On_Map_APK_GITHUB\app\src\main\res
+com.vypeensoft.friendtracker.app-pngs-31 X:\Projects_X\0_Active\8_Android_APK\01_Priority\1\Show_Two_Points_On_Map_Enhanced_APK_GITHUB\app\build\generated\res\pngs\debug
+com.vypeensoft.friendtracker.app-resValues-32 X:\Projects_X\0_Active\8_Android_APK\01_Priority\1\Show_Two_Points_On_Map_Enhanced_APK_GITHUB\app\build\generated\res\resValues\debug
+com.vypeensoft.friendtracker.app-packageDebugResources-33 X:\Projects_X\0_Active\8_Android_APK\01_Priority\1\Show_Two_Points_On_Map_Enhanced_APK_GITHUB\app\build\intermediates\incremental\debug\packageDebugResources\merged.dir
+com.vypeensoft.friendtracker.app-packageDebugResources-34 X:\Projects_X\0_Active\8_Android_APK\01_Priority\1\Show_Two_Points_On_Map_Enhanced_APK_GITHUB\app\build\intermediates\incremental\debug\packageDebugResources\stripped.dir
+com.vypeensoft.friendtracker.app-merged_res-35 X:\Projects_X\0_Active\8_Android_APK\01_Priority\1\Show_Two_Points_On_Map_Enhanced_APK_GITHUB\app\build\intermediates\merged_res\debug
+com.vypeensoft.friendtracker.app-debug-36 X:\Projects_X\0_Active\8_Android_APK\01_Priority\1\Show_Two_Points_On_Map_Enhanced_APK_GITHUB\app\src\debug\res
+com.vypeensoft.friendtracker.app-main-37 X:\Projects_X\0_Active\8_Android_APK\01_Priority\1\Show_Two_Points_On_Map_Enhanced_APK_GITHUB\app\src\main\res

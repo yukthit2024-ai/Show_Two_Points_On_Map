@@ -27,23 +27,30 @@ public class MainActivity extends AppCompatActivity {
     private MapView mapView;
     private MapLibreMap mapLibreMap;
 
-    // Coordinate state & standard Marker references
-    private LatLng redLatLng;
-    private LatLng greenLatLng;
-    private LatLng blueLatLng;
-    
-    private Marker redMarker;
-    private Marker greenMarker;
-    private Marker blueMarker;
-
-    // Persistent heading directions for each friend in radians (allows actual traveling across the map)
-    private double headingRed = Math.random() * 2 * Math.PI;
-    private double headingGreen = Math.random() * 2 * Math.PI;
-    private double headingBlue = Math.random() * 2 * Math.PI;
+    // Dynamic tracking maps
+    private final java.util.Map<String, Marker> activeMarkers = new java.util.HashMap<>();
+    private final java.util.Map<String, String> activeMarkerColors = new java.util.HashMap<>();
+    private boolean isFirstCameraCenter = true;
 
     // Movement Loop Handler
     private final android.os.Handler movementHandler = new android.os.Handler(android.os.Looper.getMainLooper());
     private Runnable movementRunnable;
+
+    private static class UserLocation {
+        final String username;
+        final double latitude;
+        final double longitude;
+        final int color;
+        final String colorName;
+
+        UserLocation(String username, double latitude, double longitude, int color, String colorName) {
+            this.username = username;
+            this.latitude = latitude;
+            this.longitude = longitude;
+            this.color = color;
+            this.colorName = colorName;
+        }
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -62,82 +69,46 @@ public class MainActivity extends AppCompatActivity {
             // Load style (using OpenFreeMap Liberty style which has detailed streets and requires no API key)
             String styleUrl = "https://tiles.openfreemap.org/styles/liberty";
             map.setStyle(new Style.Builder().fromUri(styleUrl), style -> {
+                // Request permissions right away
+                checkAndRequestStoragePermissions();
 
-                // Choose a random famous city in the world to start the simulation
-                FamousCity selectedCity = FAMOUS_CITIES[(int) (Math.random() * FAMOUS_CITIES.length)];
-                double baseLat = selectedCity.latitude;
-                double baseLon = selectedCity.longitude;
-
-                // Show a nice Toast feedback to inform the user which city loaded
-                android.widget.Toast.makeText(MainActivity.this, 
-                        "Simulation started in: " + selectedCity.name, 
-                        android.widget.Toast.LENGTH_LONG).show();
-
-                // Random angle/bearing in radians
-                double angle = Math.random() * 2 * Math.PI;
-
-                // Equilateral Triangle setup for 3 friends with exactly 1050 meters (1.050 km) side length:
-                // This targets the exact center of the requested [1000, 1100] meters constraint range!
-                double sKm = 1.050; // 1050 meters
-                double deltaLat = (sKm / 111.12) * Math.cos(angle);
-                double deltaLon = ((sKm / 111.12) * Math.sin(angle)) / Math.cos(Math.toRadians(baseLat));
-
-                redLatLng = new LatLng(baseLat, baseLon);
-                greenLatLng = new LatLng(baseLat + deltaLat, baseLon + deltaLon);
-
-                // Math for Blue Point: Place it perpendicular to the Red-Green line from their midpoint
-                // at a distance of s * sqrt(3) / 2 (height of equilateral triangle) = ~909.33 meters
-                double midLat = baseLat + deltaLat / 2.0;
-                double midLon = baseLon + deltaLon / 2.0;
-
-                double perpDistanceKm = sKm * 0.866025; // s * sqrt(3)/2
-                double perpAngle = angle + Math.PI / 2.0; // Perpendicular bearing (rotated by 90 degrees)
-                double perpLat = (perpDistanceKm / 111.12) * Math.cos(perpAngle);
-                double perpLon = ((perpDistanceKm / 111.12) * Math.sin(perpAngle)) / Math.cos(Math.toRadians(midLat));
-
-                blueLatLng = new LatLng(midLat + perpLat, midLon + perpLon);
-
-                // Create custom icons from our programmatically generated teardrop pin vector bitmaps with names
-                IconFactory iconFactory = IconFactory.getInstance(MainActivity.this);
-                Icon redIcon = iconFactory.fromBitmap(createTeardropMarkerBitmap(Color.parseColor("#E53935"), "Red")); // Crimson Red Tint
-                Icon greenIcon = iconFactory.fromBitmap(createTeardropMarkerBitmap(Color.parseColor("#4CAF50"), "Green")); // Vibrant Green Tint
-                Icon blueIcon = iconFactory.fromBitmap(createTeardropMarkerBitmap(Color.parseColor("#2196F3"), "Blue")); // Blue Tint
-
-                // Add standard built-in Markers to the Map
-                redMarker = mapLibreMap.addMarker(new MarkerOptions()
-                        .position(redLatLng)
-                        .title("Red Friend")
-                        .icon(redIcon));
-
-                greenMarker = mapLibreMap.addMarker(new MarkerOptions()
-                        .position(greenLatLng)
-                        .title("Green Friend")
-                        .icon(greenIcon));
-
-                blueMarker = mapLibreMap.addMarker(new MarkerOptions()
-                        .position(blueLatLng)
-                        .title("Blue Friend")
-                        .icon(blueIcon));
-
-                // Calculate the midpoint between the points for the camera positioning
-                LatLng cameraMidpoint = new LatLng(
-                        (redLatLng.getLatitude() + greenLatLng.getLatitude() + blueLatLng.getLatitude()) / 3.0,
-                        (redLatLng.getLongitude() + greenLatLng.getLongitude() + blueLatLng.getLongitude()) / 3.0
-                );
-
-                // Safe Initial Camera Centering: moveCamera(newLatLngZoom) is synchronous, layout size-independent
-                mapLibreMap.moveCamera(CameraUpdateFactory.newLatLngZoom(cameraMidpoint, 14.5));
-
-                // Start the loop immediately
+                // Start the polling loop immediately
                 startMovementLoop();
             });
         });
     }
 
+    private boolean checkAndRequestStoragePermissions() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            if (!android.os.Environment.isExternalStorageManager()) {
+                try {
+                    android.content.Intent intent = new android.content.Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
+                    android.net.Uri uri = android.net.Uri.fromParts("package", getPackageName(), null);
+                    intent.setData(uri);
+                    startActivity(intent);
+                    android.widget.Toast.makeText(this, "Please grant All Files Access permission for location tracker", android.widget.Toast.LENGTH_LONG).show();
+                } catch (Exception e) {
+                    android.content.Intent intent = new android.content.Intent(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
+                    startActivity(intent);
+                }
+                return false;
+            }
+            return true;
+        } else {
+            if (androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.READ_EXTERNAL_STORAGE) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                androidx.core.app.ActivityCompat.requestPermissions(this, new String[]{
+                        android.Manifest.permission.READ_EXTERNAL_STORAGE,
+                        android.Manifest.permission.WRITE_EXTERNAL_STORAGE
+                }, 100);
+                return false;
+            }
+            return true;
+        }
+    }
+
     /**
-     * Spawns a repeating 1-second loop where each marker moves in a persistent, correlated
-     * random direction by 1 to 5 meters. Dynamic group steering keeps the friends together
-     * while PBD inequality range constraints guarantee mutual distances stay strictly in [1000, 1100] meters.
+     * Spawns a repeating 1-second loop that reads dynamic location coordinates from files
+     * in /sdcard/Vypeensoft/Friends_Location_Tracker/sessions/ and maps them on screen.
      */
     private void startMovementLoop() {
         if (movementRunnable != null) return; // Already running
@@ -145,93 +116,92 @@ public class MainActivity extends AppCompatActivity {
         movementRunnable = new Runnable() {
             @Override
             public void run() {
-                if (isDestroyed() || redMarker == null || greenMarker == null || blueMarker == null) return;
+                if (isDestroyed() || mapLibreMap == null) return;
 
-                // 1. Calculate current group center point
-                double centerLat = (redLatLng.getLatitude() + greenLatLng.getLatitude() + blueLatLng.getLatitude()) / 3.0;
-                double centerLon = (redLatLng.getLongitude() + greenLatLng.getLongitude() + blueLatLng.getLongitude()) / 3.0;
-                LatLng centerPoint = new LatLng(centerLat, centerLon);
-
-                // 2. Red Heading Steering: slightly perturb and steer towards/away from center
-                double distR = calculateDistance(redLatLng, centerPoint);
-                double bearingR = calculateBearing(redLatLng, centerPoint);
-                headingRed += (Math.random() - 0.5) * Math.toRadians(30); // Perturb by +/- 15 degrees
-                if (distR > 620.0) {
-                    headingRed = blendAngles(headingRed, bearingR, 0.15); // Steer back towards center if too far
-                } else if (distR < 580.0) {
-                    headingRed = blendAngles(headingRed, bearingR + Math.PI, 0.15); // Steer away if too close
+                // 1. Ensure permissions are granted before reading files
+                boolean hasPermission = false;
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                    hasPermission = android.os.Environment.isExternalStorageManager();
+                } else {
+                    hasPermission = androidx.core.content.ContextCompat.checkSelfPermission(
+                            MainActivity.this, android.Manifest.permission.READ_EXTERNAL_STORAGE)
+                            == android.content.pm.PackageManager.PERMISSION_GRANTED;
                 }
 
-                // 3. Green Heading Steering: slightly perturb and steer towards/away from center
-                double distG = calculateDistance(greenLatLng, centerPoint);
-                double bearingG = calculateBearing(greenLatLng, centerPoint);
-                headingGreen += (Math.random() - 0.5) * Math.toRadians(30); // Perturb by +/- 15 degrees
-                if (distG > 620.0) {
-                    headingGreen = blendAngles(headingGreen, bearingG, 0.15); // Steer back towards center
-                } else if (distG < 580.0) {
-                    headingGreen = blendAngles(headingGreen, bearingG + Math.PI, 0.15); // Steer away
+                if (hasPermission) {
+                    // 2. Read and parse location files
+                    java.util.List<UserLocation> loadedLocations = readUserLocationsFromFiles();
+
+                    // 3. Keep track of active usernames
+                    java.util.Set<String> newUsernames = new java.util.HashSet<>();
+                    for (UserLocation loc : loadedLocations) {
+                        newUsernames.add(loc.username);
+                    }
+
+                    // 4. Remove markers for users who are no longer present
+                    java.util.Iterator<java.util.Map.Entry<String, Marker>> it = activeMarkers.entrySet().iterator();
+                    while (it.hasNext()) {
+                        java.util.Map.Entry<String, Marker> entry = it.next();
+                        String username = entry.getKey();
+                        if (!newUsernames.contains(username)) {
+                            mapLibreMap.removeMarker(entry.getValue());
+                            it.remove();
+                            activeMarkerColors.remove(username);
+                        }
+                    }
+
+                    // 5. Add or update markers
+                    IconFactory iconFactory = IconFactory.getInstance(MainActivity.this);
+                    for (UserLocation loc : loadedLocations) {
+                        LatLng position = new LatLng(loc.latitude, loc.longitude);
+                        Marker marker = activeMarkers.get(loc.username);
+
+                        String oldColor = activeMarkerColors.get(loc.username);
+                        boolean colorChanged = oldColor == null || !oldColor.equalsIgnoreCase(loc.colorName);
+
+                        if (marker == null) {
+                            // Create new marker
+                            Icon icon = iconFactory.fromBitmap(
+                                    createTeardropMarkerBitmap(loc.color, loc.username));
+                            Marker newMarker = mapLibreMap.addMarker(new MarkerOptions()
+                                    .position(position)
+                                    .title(loc.username)
+                                    .icon(icon));
+                            activeMarkers.put(loc.username, newMarker);
+                            activeMarkerColors.put(loc.username, loc.colorName);
+                        } else {
+                            // Update position
+                            marker.setPosition(position);
+                            // Update icon if color changed
+                            if (colorChanged) {
+                                Icon icon = iconFactory.fromBitmap(
+                                        createTeardropMarkerBitmap(loc.color, loc.username));
+                                marker.setIcon(icon);
+                                activeMarkerColors.put(loc.username, loc.colorName);
+                            }
+                        }
+                    }
+
+                    // 6. Camera centering on first successful load
+                    if (isFirstCameraCenter && !loadedLocations.isEmpty()) {
+                        isFirstCameraCenter = false;
+                        double totalLat = 0;
+                        double totalLon = 0;
+                        for (UserLocation loc : loadedLocations) {
+                            totalLat += loc.latitude;
+                            totalLon += loc.longitude;
+                        }
+                        double avgLat = totalLat / loadedLocations.size();
+                        double avgLon = totalLon / loadedLocations.size();
+                        LatLng center = new LatLng(avgLat, avgLon);
+                        mapLibreMap.animateCamera(CameraUpdateFactory.newLatLngZoom(center, 14.5));
+                    }
+
+                    // Force redraw
+                    mapView.invalidate();
                 }
 
-                // 4. Blue Heading Steering: slightly perturb and steer towards/away from center
-                double distB = calculateDistance(blueLatLng, centerPoint);
-                double bearingB = calculateBearing(blueLatLng, centerPoint);
-                headingBlue += (Math.random() - 0.5) * Math.toRadians(30); // Perturb by +/- 15 degrees
-                if (distB > 620.0) {
-                    headingBlue = blendAngles(headingBlue, bearingB, 0.15); // Steer back towards center
-                } else if (distB < 580.0) {
-                    headingBlue = blendAngles(headingBlue, bearingB + Math.PI, 0.15); // Steer away
-                }
-
-                // 5. Move all three friends by a random step of 1 to 5 meters along their persistent headings
-                double stepR = 1.0 + Math.random() * 4.0; // 1 to 5 meters
-                double deltaLatR = (stepR / 1000.0 / 111.12) * Math.cos(headingRed);
-                double deltaLonR = ((stepR / 1000.0 / 111.12) * Math.sin(headingRed)) / Math.cos(Math.toRadians(redLatLng.getLatitude()));
-                redLatLng = new LatLng(redLatLng.getLatitude() + deltaLatR, redLatLng.getLongitude() + deltaLonR);
-
-                double stepG = 1.0 + Math.random() * 4.0; // 1 to 5 meters
-                double deltaLatG = (stepG / 1000.0 / 111.12) * Math.cos(headingGreen);
-                double deltaLonG = ((stepG / 1000.0 / 111.12) * Math.sin(headingGreen)) / Math.cos(Math.toRadians(greenLatLng.getLatitude()));
-                greenLatLng = new LatLng(greenLatLng.getLatitude() + deltaLatG, greenLatLng.getLongitude() + deltaLonG);
-
-                double stepB = 1.0 + Math.random() * 4.0; // 1 to 5 meters
-                double deltaLatB = (stepB / 1000.0 / 111.12) * Math.cos(headingBlue);
-                double deltaLonB = ((stepB / 1000.0 / 111.12) * Math.sin(headingBlue)) / Math.cos(Math.toRadians(blueLatLng.getLatitude()));
-                blueLatLng = new LatLng(blueLatLng.getLatitude() + deltaLatB, blueLatLng.getLongitude() + deltaLonB);
-
-                // 6. Apply PBD Inequality Range Constraints (1000 meters to 1100 meters)
-                // If distances are inside [1000m, 1100m], the solver does absolutely nothing, letting them wander freely.
-                for (int i = 0; i < 3; i++) {
-                    LatLng[] rg = adjustPairRange(redLatLng, greenLatLng, 1000.0, 1100.0);
-                    redLatLng = rg[0];
-                    greenLatLng = rg[1];
-
-                    LatLng[] gb = adjustPairRange(greenLatLng, blueLatLng, 1000.0, 1100.0);
-                    greenLatLng = gb[0];
-                    blueLatLng = gb[1];
-
-                    LatLng[] br = adjustPairRange(blueLatLng, redLatLng, 1000.0, 1100.0);
-                    blueLatLng = br[0];
-                    redLatLng = br[1];
-                }
-
-                // Update marker positions instantly on the Map
-                redMarker.setPosition(redLatLng);
-                greenMarker.setPosition(greenLatLng);
-                blueMarker.setPosition(blueLatLng);
-
-                // Force layout redraw to render instantly
-                mapView.invalidate();
-
-                // Calculate current real-world distances for diagnostic verification
-                double dRG = calculateDistance(redLatLng, greenLatLng);
-                double dGB = calculateDistance(greenLatLng, blueLatLng);
-                double dBR = calculateDistance(blueLatLng, redLatLng);
-
-                android.util.Log.d("FriendTracker", String.format(
-                        "Tick distances: Red-Green=%.2fm, Green-Blue=%.2fm, Blue-Red=%.2fm", dRG, dGB, dBR
-                ));
-
-                // Repeat every 1 second
+                // Repeat every 1 second (1000ms)
                 movementHandler.postDelayed(this, 1000L);
             }
         };
@@ -239,80 +209,126 @@ public class MainActivity extends AppCompatActivity {
         movementHandler.post(movementRunnable);
     }
 
-    /**
-     * Blends two angles smoothly in the shortest angular direction, handling boundary wrapping around -PI and +PI.
-     */
-    private double blendAngles(double current, double target, double ratio) {
-        double diff = target - current;
-        while (diff < -Math.PI) diff += 2 * Math.PI;
-        while (diff > Math.PI) diff -= 2 * Math.PI;
-        return current + ratio * diff;
-    }
-
-    /**
-     * High-Accuracy bearing calculation in radians from p1 to p2.
-     */
-    private double calculateBearing(LatLng p1, LatLng p2) {
-        double lat1 = Math.toRadians(p1.getLatitude());
-        double lon1 = Math.toRadians(p1.getLongitude());
-        double lat2 = Math.toRadians(p2.getLatitude());
-        double lon2 = Math.toRadians(p2.getLongitude());
-
-        double dLon = lon2 - lon1;
-        double y = Math.sin(dLon) * Math.cos(lat2);
-        double x = Math.cos(lat1) * Math.sin(lat2) -
-                   Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
-
-        return Math.atan2(y, x);
-    }
-
-    /**
-     * High-Accuracy Haversine formula to compute geodesic distance between two points in meters.
-     */
-    private double calculateDistance(LatLng p1, LatLng p2) {
-        double R = 6371000; // Earth's radius in meters
-        double lat1 = Math.toRadians(p1.getLatitude());
-        double lon1 = Math.toRadians(p1.getLongitude());
-        double lat2 = Math.toRadians(p2.getLatitude());
-        double lon2 = Math.toRadians(p2.getLongitude());
-
-        double dLat = lat2 - lat1;
-        double dLon = lon2 - lon1;
-
-        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                   Math.cos(lat1) * Math.cos(lat2) *
-                   Math.sin(dLon / 2) * Math.sin(dLon / 2);
-        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-        return R * c;
-    }
-
-    /**
-     * PBD Inequality Range constraint relaxation. Adjusts coordinates only if they breach range boundaries.
-     */
-    private LatLng[] adjustPairRange(LatLng p1, LatLng p2, double minDistance, double maxDistance) {
-        double currentDistance = calculateDistance(p1, p2);
-        if (currentDistance == 0) return new LatLng[]{p1, p2};
-
-        double diff = 0;
-        if (currentDistance < minDistance) {
-            diff = currentDistance - minDistance; // Negative diff will push them apart
-        } else if (currentDistance > maxDistance) {
-            diff = currentDistance - maxDistance; // Positive diff will pull them together
-        } else {
-            return new LatLng[]{p1, p2}; // Safe range, no action needed!
-        }
+    private java.util.List<UserLocation> readUserLocationsFromFiles() {
+        java.util.List<UserLocation> locations = new java.util.ArrayList<>();
         
-        // We move each coordinate by half the error ratio
-        double factor = (diff / 2.0) / currentDistance;
+        java.io.File dir = new java.io.File("/sdcard/Vypeensoft/Friends_Location_Tracker/sessions");
+        if (!dir.exists()) {
+            dir = new java.io.File(android.os.Environment.getExternalStorageDirectory(), "Vypeensoft/Friends_Location_Tracker/sessions");
+        }
 
-        double dLat = p2.getLatitude() - p1.getLatitude();
-        double dLon = p2.getLongitude() - p1.getLongitude();
+        // Auto-create directory and create sample files if empty so it works out of the box
+        createSampleFilesIfEmpty(dir);
 
-        LatLng newP1 = new LatLng(p1.getLatitude() + dLat * factor, p1.getLongitude() + dLon * factor);
-        LatLng newP2 = new LatLng(p2.getLatitude() - dLat * factor, p2.getLongitude() - dLon * factor);
+        if (dir.exists() && dir.isDirectory()) {
+            java.io.File[] files = dir.listFiles();
+            if (files != null) {
+                for (java.io.File file : files) {
+                    if (file.isFile()) {
+                        UserLocation loc = parseLocationFile(file);
+                        if (loc != null) {
+                            locations.add(loc);
+                        }
+                    }
+                }
+            }
+        }
+        return locations;
+    }
 
-        return new LatLng[]{newP1, newP2};
+    private UserLocation parseLocationFile(java.io.File file) {
+        java.io.BufferedReader reader = null;
+        try {
+            reader = new java.io.BufferedReader(new java.io.FileReader(file));
+            String line = reader.readLine();
+            if (line != null && !line.trim().isEmpty()) {
+                String[] parts = line.split("\\|");
+                if (parts.length >= 4) {
+                    String username = parts[0].trim();
+                    double latitude = Double.parseDouble(parts[1].trim());
+                    double longitude = Double.parseDouble(parts[2].trim());
+                    String colorName = parts[3].trim();
+                    int color = parseColor(colorName);
+                    return new UserLocation(username, latitude, longitude, color, colorName);
+                }
+            }
+        } catch (Exception e) {
+            android.util.Log.e("FriendTracker", "Error parsing location file: " + file.getName(), e);
+        } finally {
+            if (reader != null) {
+                try {
+                    reader.close();
+                } catch (Exception e) {
+                    // Ignore
+                }
+            }
+        }
+        return null;
+    }
+
+    private int parseColor(String colorStr) {
+        if (colorStr == null) return Color.RED;
+        colorStr = colorStr.trim().toLowerCase();
+        switch (colorStr) {
+            case "red": return Color.parseColor("#E53935");
+            case "green": return Color.parseColor("#4CAF50");
+            case "blue": return Color.parseColor("#2196F3");
+            case "yellow": return Color.parseColor("#FFEB3B");
+            case "orange": return Color.parseColor("#FF9800");
+            case "purple": return Color.parseColor("#9C27B0");
+            case "pink": return Color.parseColor("#E91E63");
+            case "teal": return Color.parseColor("#009688");
+            case "cyan": return Color.parseColor("#00BCD4");
+            case "magenta": return Color.parseColor("#FF00FF");
+            case "black": return Color.BLACK;
+            case "white": return Color.WHITE;
+            case "gray":
+            case "grey": return Color.GRAY;
+            default:
+                try {
+                    if (!colorStr.startsWith("#")) {
+                        return Color.parseColor("#" + colorStr);
+                    }
+                    return Color.parseColor(colorStr);
+                } catch (Exception e) {
+                    return Color.RED; // fallback
+                }
+        }
+    }
+
+    private void createSampleFilesIfEmpty(java.io.File dir) {
+        try {
+            if (!dir.exists()) {
+                dir.mkdirs();
+            }
+            java.io.File[] files = dir.listFiles();
+            if (files == null || files.length == 0) {
+                // Write 3 sample files for Red, Green, and Blue friends
+                writeSampleFile(new java.io.File(dir, "friend_red.txt"), "Red Friend|9.9312|76.2673|Red");
+                writeSampleFile(new java.io.File(dir, "friend_green.txt"), "Green Friend|9.9412|76.2773|Green");
+                writeSampleFile(new java.io.File(dir, "friend_blue.txt"), "Blue Friend|9.9212|76.2573|Blue");
+            }
+        } catch (Exception e) {
+            android.util.Log.e("FriendTracker", "Error creating sample files", e);
+        }
+    }
+
+    private void writeSampleFile(java.io.File file, String content) {
+        java.io.FileWriter writer = null;
+        try {
+            writer = new java.io.FileWriter(file);
+            writer.write(content);
+        } catch (Exception e) {
+            android.util.Log.e("FriendTracker", "Error writing sample file: " + file.getName(), e);
+        } finally {
+            if (writer != null) {
+                try {
+                    writer.close();
+                } catch (Exception e) {
+                    // Ignore
+                }
+            }
+        }
     }
 
     /**
@@ -427,7 +443,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         mapView.onResume();
-        if (redMarker != null && greenMarker != null && blueMarker != null) {
+        if (mapLibreMap != null) {
             startMovementLoop();
         }
     }
