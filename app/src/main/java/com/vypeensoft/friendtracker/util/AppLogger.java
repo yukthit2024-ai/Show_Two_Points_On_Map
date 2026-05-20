@@ -14,7 +14,7 @@ import java.util.Locale;
 public class AppLogger {
     private static final String TAG = "AppLogger";
     public static final String ACTION_LOG_UPDATE = "com.vypeensoft.friendtracker.LOG_UPDATE";
-    private static final String LOG_DIR_PATH = Environment.getExternalStorageDirectory().getAbsolutePath() + "/Friends_Location_Tracker/logs";
+    private static final String LOG_DIR_PATH = Environment.getExternalStorageDirectory().getAbsolutePath() + "/Vypeensoft/Friends_Location_Tracker/logs";
     private static String currentLogFileName = null;
 
     private static String getLogFileName() {
