@@ -24,7 +24,22 @@ import java.util.Map;
 
 public class SettingsPersistenceManager {
 
-    private static final String SETTINGS_DIR_PATH = Environment.getExternalStorageDirectory().getAbsolutePath() + "/Vypeensoft/Friends_Location_Tracker/settings";
+    private static final String SETTINGS_DIR_PATH = getSettingsDirPath();
+
+    private static String getSettingsDirPath() {
+        File dir = new File("/sdcard/Vypeensoft/Friends_Location_Tracker/settings");
+        if (dir.exists()) {
+            return "/sdcard/Vypeensoft/Friends_Location_Tracker/settings";
+        }
+        File envDir = new File(Environment.getExternalStorageDirectory(), "Vypeensoft/Friends_Location_Tracker/settings");
+        if (envDir.exists()) {
+            return envDir.getAbsolutePath();
+        }
+        if (dir.mkdirs()) {
+            return "/sdcard/Vypeensoft/Friends_Location_Tracker/settings";
+        }
+        return envDir.getAbsolutePath();
+    }
     
     private static final String FILE_MAP_SETTINGS = "map_settings.json";
     private static final String FILE_MATRIX_CREDENTIALS = "matrix_credentials.json";
