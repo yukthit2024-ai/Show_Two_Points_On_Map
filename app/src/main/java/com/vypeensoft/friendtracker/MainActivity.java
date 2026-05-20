@@ -279,7 +279,7 @@ public class MainActivity extends AppCompatActivity {
         }
 
         // Auto-create directory and create sample files if empty so it works out of the box
-        createSampleFilesIfEmpty(dir);
+        //createSampleFilesIfEmpty(dir);
 
         java.util.Set<String> currentFilePaths = new java.util.HashSet<>();
 
