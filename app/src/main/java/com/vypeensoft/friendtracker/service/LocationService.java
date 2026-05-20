@@ -96,11 +96,48 @@ public class LocationService extends Service {
         LocationMessage message = new LocationMessage(currentUserId, location.getLatitude(), location.getLongitude());
         matrixClient.sendLocation(message);
         
+        // Clean sender for session file name
+        String cleanSender = currentUserId;
+        if (cleanSender.contains(":")) {
+            cleanSender = cleanSender.split(":")[0];
+        }
+        if (cleanSender.startsWith("@")) {
+            cleanSender = cleanSender.substring(1);
+        }
+        cleanSender = cleanSender.replaceAll("[^a-zA-Z0-9_.-]", "_");
+        
+        // Write our own GPS location to sessions folder
+        writeSelfLocationToSessions(cleanSender, currentUserId, location.getLatitude(), location.getLongitude());
+        
         // Broadcast to Activity if it's running
         Intent intent = new Intent("com.vypeensoft.friendtracker.LOCATION_UPDATE");
         intent.putExtra("latitude", location.getLatitude());
         intent.putExtra("longitude", location.getLongitude());
         sendBroadcast(intent);
+    }
+
+    private void writeSelfLocationToSessions(String cleanSender, String displayName, double lat, double lon) {
+        java.io.File dir = new java.io.File("/sdcard/Vypeensoft/Friends_Location_Tracker/sessions");
+        if (!dir.exists()) {
+            dir.mkdirs();
+        }
+        if (!dir.exists()) {
+            dir = new java.io.File(android.os.Environment.getExternalStorageDirectory(), "Vypeensoft/Friends_Location_Tracker/sessions");
+            if (!dir.exists()) {
+                dir.mkdirs();
+            }
+        }
+
+        java.io.File file = new java.io.File(dir, cleanSender + ".txt");
+        try {
+            String content = displayName + "|" + lat + "|" + lon + "|#1976D2";
+            java.io.FileWriter writer = new java.io.FileWriter(file, false); // false to overwrite
+            writer.write(content);
+            writer.close();
+            Log.i(TAG, "Successfully wrote self location to " + file.getAbsolutePath());
+        } catch (Exception e) {
+            Log.e(TAG, "Error writing self location to sessions folder", e);
+        }
     }
 
     private Notification getNotification() {
