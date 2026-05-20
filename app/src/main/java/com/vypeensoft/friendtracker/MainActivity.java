@@ -1142,7 +1142,7 @@ public class MainActivity extends AppCompatActivity {
         builder.setView(rootLayout);
         builder.setPositiveButton("Close", null);
 
-        android.app.AlertDialog dialog = builder.create();
+        androidx.appcompat.app.AlertDialog dialog = builder.create();
 
         btnAdd.setOnClickListener(v -> {
             showAddRoomDialog(listLayout, dialog);
@@ -1232,7 +1232,7 @@ public class MainActivity extends AppCompatActivity {
         return gd;
     }
 
-    private void showAddRoomDialog(android.widget.LinearLayout listLayout, android.app.AlertDialog parentDialog) {
+    private void showAddRoomDialog(android.widget.LinearLayout listLayout, androidx.appcompat.app.AlertDialog parentDialog) {
         com.google.android.material.dialog.MaterialAlertDialogBuilder builder = 
             new com.google.android.material.dialog.MaterialAlertDialogBuilder(this);
         builder.setTitle("Add Matrix Room");
