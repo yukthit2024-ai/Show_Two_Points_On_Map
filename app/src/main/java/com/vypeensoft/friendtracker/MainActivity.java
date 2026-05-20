@@ -138,21 +138,6 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    @Override
-    protected void onResume() {
-        super.onResume();
-        if (mapView != null) {
-            mapView.onResume();
-        }
-        // Import settings in case they were modified/saved in Settings Activities
-        com.vypeensoft.friendtracker.util.SettingsPersistenceManager.importSettings(this);
-        loadMatrixCredentialsOnStartup();
-        if (matrixClient != null) {
-            matrixClient.loadConfig(this);
-        }
-        restartMatrixPolling();
-    }
-
     private boolean checkAndRequestStoragePermissions() {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
             if (!android.os.Environment.isExternalStorageManager()) {
@@ -551,10 +536,16 @@ public class MainActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         mapView.onResume();
+        // Import settings in case they were modified/saved in Settings Activities
+        com.vypeensoft.friendtracker.util.SettingsPersistenceManager.importSettings(this);
+        loadMatrixCredentialsOnStartup();
+        if (matrixClient != null) {
+            matrixClient.loadConfig(this);
+        }
         if (mapLibreMap != null) {
             startMovementLoop();
         }
-        startMatrixPolling();
+        restartMatrixPolling();
     }
 
     @Override
