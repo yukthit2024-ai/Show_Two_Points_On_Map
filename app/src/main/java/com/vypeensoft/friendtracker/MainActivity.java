@@ -933,7 +933,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showMatrixCredentialsDialog() {
-        android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(this);
+        com.google.android.material.dialog.MaterialAlertDialogBuilder builder = 
+            new com.google.android.material.dialog.MaterialAlertDialogBuilder(this);
         builder.setTitle("Matrix Credentials");
 
         android.widget.ScrollView scrollView = new android.widget.ScrollView(this);
@@ -944,32 +945,80 @@ public class MainActivity extends AppCompatActivity {
 
         android.content.SharedPreferences prefs = getSharedPreferences(MatrixClient.PREFS_NAME, MODE_PRIVATE);
 
-        layout.addView(createLabel("Homeserver URL"));
-        android.widget.EditText editHomeserver = createInput(prefs.getString(MatrixClient.KEY_MATRIX_HOMESERVER, "https://matrix-client.matrix.org"));
-        layout.addView(editHomeserver);
+        // Connection & Account Setup Section Title
+        android.widget.TextView secTitle = new android.widget.TextView(this);
+        secTitle.setText("Connection & Account Setup");
+        secTitle.setTextSize(15);
+        secTitle.setTypeface(null, android.graphics.Typeface.BOLD);
+        secTitle.setTextColor(Color.parseColor("#1976D2"));
+        secTitle.setPadding(0, 0, 0, 20);
+        layout.addView(secTitle);
 
-        layout.addView(createLabel("Username"));
-        android.widget.EditText editUsername = createInput(prefs.getString(MatrixClient.KEY_MATRIX_USERNAME, ""));
-        layout.addView(editUsername);
+        // Material Form Fields
+        com.google.android.material.textfield.TextInputLayout lHomeserver = new com.google.android.material.textfield.TextInputLayout(this);
+        lHomeserver.setHint("Homeserver URL");
+        lHomeserver.setBoxBackgroundMode(com.google.android.material.textfield.TextInputLayout.BOX_BACKGROUND_OUTLINE);
+        lHomeserver.setBoxStrokeColor(Color.parseColor("#1976D2"));
+        com.google.android.material.textfield.TextInputEditText editHomeserver = new com.google.android.material.textfield.TextInputEditText(lHomeserver.getContext());
+        editHomeserver.setText(prefs.getString(MatrixClient.KEY_MATRIX_HOMESERVER, "https://matrix-client.matrix.org"));
+        lHomeserver.addView(editHomeserver);
+        lHomeserver.setPadding(0, 0, 0, 16);
+        layout.addView(lHomeserver);
 
-        layout.addView(createLabel("Password"));
-        android.widget.EditText editPassword = createInput(prefs.getString(MatrixClient.KEY_MATRIX_PASSWORD, ""));
+        com.google.android.material.textfield.TextInputLayout lUsername = new com.google.android.material.textfield.TextInputLayout(this);
+        lUsername.setHint("Username");
+        lUsername.setBoxBackgroundMode(com.google.android.material.textfield.TextInputLayout.BOX_BACKGROUND_OUTLINE);
+        lUsername.setBoxStrokeColor(Color.parseColor("#1976D2"));
+        com.google.android.material.textfield.TextInputEditText editUsername = new com.google.android.material.textfield.TextInputEditText(lUsername.getContext());
+        editUsername.setText(prefs.getString(MatrixClient.KEY_MATRIX_USERNAME, ""));
+        lUsername.addView(editUsername);
+        lUsername.setPadding(0, 0, 0, 16);
+        layout.addView(lUsername);
+
+        com.google.android.material.textfield.TextInputLayout lPassword = new com.google.android.material.textfield.TextInputLayout(this);
+        lPassword.setHint("Password");
+        lPassword.setBoxBackgroundMode(com.google.android.material.textfield.TextInputLayout.BOX_BACKGROUND_OUTLINE);
+        lPassword.setBoxStrokeColor(Color.parseColor("#1976D2"));
+        lPassword.setPasswordVisibilityToggleEnabled(true);
+        com.google.android.material.textfield.TextInputEditText editPassword = new com.google.android.material.textfield.TextInputEditText(lPassword.getContext());
+        editPassword.setText(prefs.getString(MatrixClient.KEY_MATRIX_PASSWORD, ""));
         editPassword.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        layout.addView(editPassword);
+        lPassword.addView(editPassword);
+        lPassword.setPadding(0, 0, 0, 16);
+        layout.addView(lPassword);
 
-        layout.addView(createLabel("Access Token (Cached)"));
-        android.widget.EditText editToken = createInput(prefs.getString(MatrixClient.KEY_MATRIX_TOKEN, ""));
-        layout.addView(editToken);
+        com.google.android.material.textfield.TextInputLayout lToken = new com.google.android.material.textfield.TextInputLayout(this);
+        lToken.setHint("Access Token (Cached)");
+        lToken.setBoxBackgroundMode(com.google.android.material.textfield.TextInputLayout.BOX_BACKGROUND_OUTLINE);
+        lToken.setBoxStrokeColor(Color.parseColor("#1976D2"));
+        com.google.android.material.textfield.TextInputEditText editToken = new com.google.android.material.textfield.TextInputEditText(lToken.getContext());
+        editToken.setText(prefs.getString(MatrixClient.KEY_MATRIX_TOKEN, ""));
+        lToken.addView(editToken);
+        lToken.setPadding(0, 0, 0, 16);
+        layout.addView(lToken);
 
-        layout.addView(createLabel("Display Name"));
-        android.widget.EditText editDisplayName = createInput(prefs.getString(MatrixClient.KEY_MATRIX_DISPLAY_NAME, ""));
-        layout.addView(editDisplayName);
+        com.google.android.material.textfield.TextInputLayout lDisplayName = new com.google.android.material.textfield.TextInputLayout(this);
+        lDisplayName.setHint("Display Name");
+        lDisplayName.setBoxBackgroundMode(com.google.android.material.textfield.TextInputLayout.BOX_BACKGROUND_OUTLINE);
+        lDisplayName.setBoxStrokeColor(Color.parseColor("#1976D2"));
+        com.google.android.material.textfield.TextInputEditText editDisplayName = new com.google.android.material.textfield.TextInputEditText(lDisplayName.getContext());
+        editDisplayName.setText(prefs.getString(MatrixClient.KEY_MATRIX_DISPLAY_NAME, ""));
+        lDisplayName.addView(editDisplayName);
+        lDisplayName.setPadding(0, 0, 0, 16);
+        layout.addView(lDisplayName);
 
-        layout.addView(createLabel("Polling Period (seconds)"));
+        com.google.android.material.textfield.TextInputLayout lPollPeriod = new com.google.android.material.textfield.TextInputLayout(this);
+        lPollPeriod.setHint("Polling Period (seconds)");
+        lPollPeriod.setBoxBackgroundMode(com.google.android.material.textfield.TextInputLayout.BOX_BACKGROUND_OUTLINE);
+        lPollPeriod.setBoxStrokeColor(Color.parseColor("#1976D2"));
+        lPollPeriod.setHelperText("Select interval to query room messages.");
+        com.google.android.material.textfield.TextInputEditText editPollPeriod = new com.google.android.material.textfield.TextInputEditText(lPollPeriod.getContext());
         long currentPeriodMs = prefs.getLong(MatrixClient.KEY_MATRIX_POLLING_PERIOD, 5000L);
-        android.widget.EditText editPollPeriod = createInput(String.valueOf(currentPeriodMs / 1000L));
+        editPollPeriod.setText(String.valueOf(currentPeriodMs / 1000L));
         editPollPeriod.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
-        layout.addView(editPollPeriod);
+        lPollPeriod.addView(editPollPeriod);
+        lPollPeriod.setPadding(0, 0, 0, 16);
+        layout.addView(lPollPeriod);
 
         // Load values from JSON file if it exists, over-writing SharedPreferences defaults
         loadMatrixCredentialsFromFile(editHomeserver, editUsername, editPassword, editToken, editDisplayName, editPollPeriod);
@@ -1027,12 +1076,13 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showMatrixRoomsDialog() {
-        android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(this);
+        com.google.android.material.dialog.MaterialAlertDialogBuilder builder = 
+            new com.google.android.material.dialog.MaterialAlertDialogBuilder(this);
         builder.setTitle("Matrix Rooms Manager");
 
         android.widget.LinearLayout rootLayout = new android.widget.LinearLayout(this);
         rootLayout.setOrientation(android.widget.LinearLayout.VERTICAL);
-        rootLayout.setPadding(36, 24, 36, 24);
+        rootLayout.setPadding(48, 36, 48, 36);
 
         android.widget.ScrollView scrollView = new android.widget.ScrollView(this);
         android.widget.LinearLayout listLayout = new android.widget.LinearLayout(this);
@@ -1048,7 +1098,7 @@ public class MainActivity extends AppCompatActivity {
         android.widget.TextView headActive = new android.widget.TextView(this);
         headActive.setText("Active");
         headActive.setTextSize(14);
-        headActive.setTextColor(Color.parseColor("#1A237E"));
+        headActive.setTextColor(Color.parseColor("#1976D2"));
         headActive.setTypeface(null, android.graphics.Typeface.BOLD);
         headActive.setLayoutParams(new android.widget.LinearLayout.LayoutParams(120, -2));
         headers.addView(headActive);
@@ -1056,7 +1106,7 @@ public class MainActivity extends AppCompatActivity {
         android.widget.TextView headName = new android.widget.TextView(this);
         headName.setText("Room Name");
         headName.setTextSize(14);
-        headName.setTextColor(Color.parseColor("#1A237E"));
+        headName.setTextColor(Color.parseColor("#1976D2"));
         headName.setTypeface(null, android.graphics.Typeface.BOLD);
         headName.setLayoutParams(new android.widget.LinearLayout.LayoutParams(0, -2, 1.0f));
         headers.addView(headName);
@@ -1064,7 +1114,7 @@ public class MainActivity extends AppCompatActivity {
         android.widget.TextView headId = new android.widget.TextView(this);
         headId.setText("Room ID");
         headId.setTextSize(14);
-        headId.setTextColor(Color.parseColor("#1A237E"));
+        headId.setTextColor(Color.parseColor("#1976D2"));
         headId.setTypeface(null, android.graphics.Typeface.BOLD);
         headId.setLayoutParams(new android.widget.LinearLayout.LayoutParams(0, -2, 1.2f));
         headers.addView(headId);
@@ -1079,10 +1129,11 @@ public class MainActivity extends AppCompatActivity {
 
         rootLayout.addView(scrollView, new android.widget.LinearLayout.LayoutParams(-1, 500));
 
-        android.widget.Button btnAdd = new android.widget.Button(this);
+        com.google.android.material.button.MaterialButton btnAdd = new com.google.android.material.button.MaterialButton(this);
         btnAdd.setText("+ Add Matrix Room");
         btnAdd.setTextColor(Color.WHITE);
-        btnAdd.setBackgroundColor(Color.parseColor("#2E7D32"));
+        btnAdd.setBackgroundColor(Color.parseColor("#1976D2"));
+        btnAdd.setCornerRadius(8);
         android.widget.LinearLayout.LayoutParams btnParams = new android.widget.LinearLayout.LayoutParams(-1, -2);
         btnParams.setMargins(0, 24, 0, 0);
         btnAdd.setLayoutParams(btnParams);
@@ -1182,20 +1233,31 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showAddRoomDialog(android.widget.LinearLayout listLayout, android.app.AlertDialog parentDialog) {
-        android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(this);
+        com.google.android.material.dialog.MaterialAlertDialogBuilder builder = 
+            new com.google.android.material.dialog.MaterialAlertDialogBuilder(this);
         builder.setTitle("Add Matrix Room");
 
         android.widget.LinearLayout layout = new android.widget.LinearLayout(this);
         layout.setOrientation(android.widget.LinearLayout.VERTICAL);
         layout.setPadding(48, 36, 48, 36);
 
-        layout.addView(createLabel("Room Display Name"));
-        android.widget.EditText editName = createInput("");
-        layout.addView(editName);
+        com.google.android.material.textfield.TextInputLayout lName = new com.google.android.material.textfield.TextInputLayout(this);
+        lName.setHint("Room Display Name");
+        lName.setBoxBackgroundMode(com.google.android.material.textfield.TextInputLayout.BOX_BACKGROUND_OUTLINE);
+        lName.setBoxStrokeColor(Color.parseColor("#1976D2"));
+        com.google.android.material.textfield.TextInputEditText editName = new com.google.android.material.textfield.TextInputEditText(lName.getContext());
+        lName.addView(editName);
+        lName.setPadding(0, 0, 0, 16);
+        layout.addView(lName);
 
-        layout.addView(createLabel("Room Identifier (e.g. !room:matrix.org)"));
-        android.widget.EditText editId = createInput("");
-        layout.addView(editId);
+        com.google.android.material.textfield.TextInputLayout lId = new com.google.android.material.textfield.TextInputLayout(this);
+        lId.setHint("Room Identifier (e.g. !room:matrix.org)");
+        lId.setBoxBackgroundMode(com.google.android.material.textfield.TextInputLayout.BOX_BACKGROUND_OUTLINE);
+        lId.setBoxStrokeColor(Color.parseColor("#1976D2"));
+        com.google.android.material.textfield.TextInputEditText editId = new com.google.android.material.textfield.TextInputEditText(lId.getContext());
+        lId.addView(editId);
+        lId.setPadding(0, 0, 0, 16);
+        layout.addView(lId);
 
         builder.setView(layout);
         builder.setPositiveButton("Add", (dialog, which) -> {
@@ -1220,7 +1282,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showHelpDialog() {
-        android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(this);
+        com.google.android.material.dialog.MaterialAlertDialogBuilder builder = 
+            new com.google.android.material.dialog.MaterialAlertDialogBuilder(this);
         builder.setTitle("Integration Help Guide");
 
         android.widget.ScrollView scrollView = new android.widget.ScrollView(this);
@@ -1252,7 +1315,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showAboutDialog() {
-        android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(this);
+        com.google.android.material.dialog.MaterialAlertDialogBuilder builder = 
+            new com.google.android.material.dialog.MaterialAlertDialogBuilder(this);
         builder.setTitle("About App");
 
         android.widget.LinearLayout layout = new android.widget.LinearLayout(this);
