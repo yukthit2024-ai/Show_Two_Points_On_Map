@@ -17,6 +17,7 @@ public class MapSettingsActivity extends AppCompatActivity {
 
     public static final String PREFS_NAME = "AppConfig";
     public static final String KEY_STYLE_URL = "map_style_url";
+    public static final String KEY_GPS_REFRESH_INTERVAL = "gps_refresh_interval";
     public static final String KEY_MATRIX_HOMESERVER = "matrix_homeserver";
     public static final String KEY_MATRIX_TOKEN = "matrix_token";
     public static final String KEY_MATRIX_ROOM_ID = "matrix_room_id";
@@ -27,6 +28,7 @@ public class MapSettingsActivity extends AppCompatActivity {
     public static final String KEY_MATRIX_POLLING_PERIOD = "matrix_polling_period";
 
     private TextInputEditText editStyleUrl;
+    private TextInputEditText editGpsInterval;
     private Button btnSave;
 
     @Override
@@ -41,6 +43,7 @@ public class MapSettingsActivity extends AppCompatActivity {
         }
 
         editStyleUrl = findViewById(R.id.edit_mapbox_token);
+        editGpsInterval = findViewById(R.id.edit_gps_interval);
         btnSave = findViewById(R.id.btn_save);
 
         loadConfig();
@@ -51,7 +54,8 @@ public class MapSettingsActivity extends AppCompatActivity {
     private void loadConfig() {
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         editStyleUrl.setText(prefs.getString(KEY_STYLE_URL, "https://tiles.openfreemap.org/styles/liberty"));
-        editStyleUrl.setText(prefs.getString(KEY_STYLE_URL, "https://tiles.openfreemap.org/styles/liberty"));
+        long intervalSec = prefs.getLong(KEY_GPS_REFRESH_INTERVAL, 10L);
+        editGpsInterval.setText(String.valueOf(intervalSec));
     }
 
     private void saveConfig() {
@@ -59,10 +63,30 @@ public class MapSettingsActivity extends AppCompatActivity {
         SharedPreferences.Editor editor = prefs.edit();
 
         editor.putString(KEY_STYLE_URL, editStyleUrl.getText().toString().trim());
-        editor.putString(KEY_STYLE_URL, editStyleUrl.getText().toString().trim());
+
+        String intervalStr = editGpsInterval.getText().toString().trim();
+        long intervalSec = 10L;
+        try {
+            intervalSec = Long.parseLong(intervalStr);
+            if (intervalSec < 1L) intervalSec = 1L;
+        } catch (NumberFormatException ignored) {}
+        editor.putLong(KEY_GPS_REFRESH_INTERVAL, intervalSec);
 
         if (editor.commit()) {
             SettingsPersistenceManager.exportSettings(this);
+            
+            // Restart location tracking service to apply the new interval
+            try {
+                android.content.Intent serviceIntent = new android.content.Intent(this, com.vypeensoft.friendtracker.service.LocationService.class);
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                    startForegroundService(serviceIntent);
+                } else {
+                    startService(serviceIntent);
+                }
+            } catch (Exception e) {
+                android.util.Log.e("FriendTracker", "Error restarting LocationService with new interval", e);
+            }
+
             Toast.makeText(this, "Configuration Saved", Toast.LENGTH_SHORT).show();
             finish();
         } else {

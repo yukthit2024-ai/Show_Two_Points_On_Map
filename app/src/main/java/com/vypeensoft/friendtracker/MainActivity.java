@@ -139,8 +139,10 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private boolean checkAndRequestStoragePermissions() {
+        boolean storageGranted = false;
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-            if (!android.os.Environment.isExternalStorageManager()) {
+            storageGranted = android.os.Environment.isExternalStorageManager();
+            if (!storageGranted) {
                 try {
                     android.content.Intent intent = new android.content.Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
                     android.net.Uri uri = android.net.Uri.fromParts("package", getPackageName(), null);
@@ -151,19 +153,39 @@ public class MainActivity extends AppCompatActivity {
                     android.content.Intent intent = new android.content.Intent(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
                     startActivity(intent);
                 }
-                return false;
             }
-            return true;
         } else {
-            if (androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.READ_EXTERNAL_STORAGE) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            storageGranted = androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.WRITE_EXTERNAL_STORAGE) == android.content.pm.PackageManager.PERMISSION_GRANTED;
+            if (!storageGranted) {
                 androidx.core.app.ActivityCompat.requestPermissions(this, new String[]{
                         android.Manifest.permission.READ_EXTERNAL_STORAGE,
                         android.Manifest.permission.WRITE_EXTERNAL_STORAGE
                 }, 100);
-                return false;
             }
-            return true;
         }
+
+        boolean locationGranted = androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED;
+        if (!locationGranted) {
+            androidx.core.app.ActivityCompat.requestPermissions(this, new String[]{
+                    android.Manifest.permission.ACCESS_FINE_LOCATION,
+                    android.Manifest.permission.ACCESS_COARSE_LOCATION
+            }, 101);
+        }
+
+        if (storageGranted && locationGranted) {
+            try {
+                android.content.Intent serviceIntent = new android.content.Intent(this, com.vypeensoft.friendtracker.service.LocationService.class);
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                    startForegroundService(serviceIntent);
+                } else {
+                    startService(serviceIntent);
+                }
+            } catch (Exception e) {
+                android.util.Log.e("FriendTracker", "Failed to start LocationService", e);
+            }
+        }
+
+        return storageGranted && locationGranted;
     }
 
     /**
@@ -546,6 +568,28 @@ public class MainActivity extends AppCompatActivity {
             startMovementLoop();
         }
         restartMatrixPolling();
+
+        // Ensure LocationService is started if permissions are granted
+        if (androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            boolean storageGranted = false;
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                storageGranted = android.os.Environment.isExternalStorageManager();
+            } else {
+                storageGranted = androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.WRITE_EXTERNAL_STORAGE) == android.content.pm.PackageManager.PERMISSION_GRANTED;
+            }
+            if (storageGranted) {
+                try {
+                    android.content.Intent serviceIntent = new android.content.Intent(this, com.vypeensoft.friendtracker.service.LocationService.class);
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                        startForegroundService(serviceIntent);
+                    } else {
+                        startService(serviceIntent);
+                    }
+                } catch (Exception e) {
+                    android.util.Log.e("FriendTracker", "Failed to start LocationService in onResume", e);
+                }
+            }
+        }
     }
 
     @Override

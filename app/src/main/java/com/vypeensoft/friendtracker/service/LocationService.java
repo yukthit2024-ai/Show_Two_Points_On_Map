@@ -66,15 +66,21 @@ public class LocationService extends Service {
 
     private void requestLocationUpdates() {
         SharedPreferences prefs = getSharedPreferences(MapSettingsActivity.PREFS_NAME, Context.MODE_PRIVATE);
-        long pollingPeriodMs = prefs.getLong(MapSettingsActivity.KEY_MATRIX_POLLING_PERIOD, 10000L);
+        long gpsIntervalSec = prefs.getLong(MapSettingsActivity.KEY_GPS_REFRESH_INTERVAL, 10L);
+        long gpsIntervalMs = gpsIntervalSec * 1000L;
+        if (gpsIntervalMs < 1000L) {
+            gpsIntervalMs = 10000L;
+        }
         
-        Log.d(TAG, "Requesting location updates with period: " + pollingPeriodMs + "ms");
+        Log.d(TAG, "Requesting location updates with customized GPS refresh interval: " + gpsIntervalMs + "ms");
 
-        LocationRequest locationRequest = new LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, pollingPeriodMs)
-                .setMinUpdateIntervalMillis(pollingPeriodMs / 2)
+        LocationRequest locationRequest = new LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, gpsIntervalMs)
+                .setMinUpdateIntervalMillis(gpsIntervalMs / 2)
                 .build();
 
         try {
+            // Remove previous updates before requesting new ones to prevent overlaps
+            fusedLocationClient.removeLocationUpdates(locationCallback);
             fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper());
         } catch (SecurityException e) {
             Log.e(TAG, "Location permission missing: " + e.getMessage());
@@ -117,26 +123,33 @@ public class LocationService extends Service {
     }
 
     private void writeSelfLocationToSessions(String cleanSender, String displayName, double lat, double lon) {
-        java.io.File dir = new java.io.File("/sdcard/Vypeensoft/Friends_Location_Tracker/sessions");
-        if (!dir.exists()) {
-            dir.mkdirs();
-        }
-        if (!dir.exists()) {
-            dir = new java.io.File(android.os.Environment.getExternalStorageDirectory(), "Vypeensoft/Friends_Location_Tracker/sessions");
+        String[] paths = {
+            "/sdcard/Vypeensoft/Friends_Location_Tracker/sessions",
+            "/sdcard/Vypeensoft/Freinds_Location_Tracker/sessions"
+        };
+
+        for (String path : paths) {
+            java.io.File dir = new java.io.File(path);
             if (!dir.exists()) {
                 dir.mkdirs();
             }
-        }
+            if (!dir.exists()) {
+                dir = new java.io.File(android.os.Environment.getExternalStorageDirectory(), path.replace("/sdcard/", ""));
+                if (!dir.exists()) {
+                    dir.mkdirs();
+                }
+            }
 
-        java.io.File file = new java.io.File(dir, cleanSender + ".txt");
-        try {
-            String content = displayName + "|" + lat + "|" + lon + "|#1976D2";
-            java.io.FileWriter writer = new java.io.FileWriter(file, false); // false to overwrite
-            writer.write(content);
-            writer.close();
-            Log.i(TAG, "Successfully wrote self location to " + file.getAbsolutePath());
-        } catch (Exception e) {
-            Log.e(TAG, "Error writing self location to sessions folder", e);
+            java.io.File file = new java.io.File(dir, cleanSender + ".txt");
+            try {
+                String content = displayName + "|" + lat + "|" + lon + "|#1976D2";
+                java.io.FileWriter writer = new java.io.FileWriter(file, false); // false to overwrite
+                writer.write(content);
+                writer.close();
+                Log.i(TAG, "Successfully wrote self location to " + file.getAbsolutePath());
+            } catch (Exception e) {
+                Log.e(TAG, "Error writing self location to sessions folder: " + path, e);
+            }
         }
     }
 

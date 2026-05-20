@@ -62,6 +62,7 @@ public class SettingsPersistenceManager {
             // Category 1: Map Settings
             JSONObject mapJson = new JSONObject();
             mapJson.put(MapSettingsActivity.KEY_STYLE_URL, prefs.getString(MapSettingsActivity.KEY_STYLE_URL, ""));
+            mapJson.put(MapSettingsActivity.KEY_GPS_REFRESH_INTERVAL, prefs.getLong(MapSettingsActivity.KEY_GPS_REFRESH_INTERVAL, 10L));
             saveToFile(new File(dir, FILE_MAP_SETTINGS), mapJson.toString(4));
 
             // Category 2: Matrix Credentials
@@ -104,6 +105,8 @@ public class SettingsPersistenceManager {
                 JSONObject json = new JSONObject(content);
                 if (json.has(MapSettingsActivity.KEY_STYLE_URL))
                     editor.putString(MapSettingsActivity.KEY_STYLE_URL, json.getString(MapSettingsActivity.KEY_STYLE_URL));
+                if (json.has(MapSettingsActivity.KEY_GPS_REFRESH_INTERVAL))
+                    editor.putLong(MapSettingsActivity.KEY_GPS_REFRESH_INTERVAL, json.getLong(MapSettingsActivity.KEY_GPS_REFRESH_INTERVAL));
             }
 
             // Import Matrix Credentials

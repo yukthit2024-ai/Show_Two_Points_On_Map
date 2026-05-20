@@ -50,6 +50,29 @@
                     android:hint="Map Style URL" />
             </com.google.android.material.textfield.TextInputLayout>
 
+            <!-- GPS Refresh Section -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="GPS Location Tracking"
+                android:textStyle="bold"
+                android:layout_marginTop="16dp"
+                android:layout_marginBottom="8dp" />
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="24dp"
+                app:helperText="Enter the GPS refresh interval in seconds.">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/edit_gps_interval"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="number"
+                    android:hint="GPS Refresh Interval (seconds)" />
+            </com.google.android.material.textfield.TextInputLayout>
+
             <Button
                 android:id="@+id/btn_save"
                 android:layout_width="match_parent"
